@@ -7,9 +7,9 @@
 // 
 
 /* 
-	PMP Test for RWX of memory region in TOR address matching mode
-	PMP memory region is defined b/w pmpaddr0 and base address
-	pmpcfg0 is used with the corresponding address registers 
+	satp tests for:
+	* csr access in S, M and U mode.
+	* RW permission of WARL fields in bare mood in M, U and S mode.
  */
 
 
@@ -30,7 +30,7 @@ RVTEST_CODE_BEGIN
 
 
 #ifdef TEST_CASE_1
-    RVTEST_CASE(1,"//check ISA:=regex(.*32.*); check ISA:=regex(.*I.*Zicsr.*); def rvtest_mtrap_routine=True; def TEST_CASE_1=True",pmp-tor)
+    RVTEST_CASE(1,"//check ISA:=regex(.*32.*); check ISA:=regex(.*I.*Zicsr.*); def rvtest_mtrap_routine=True; def TEST_CASE_1=True",satp)
 RVTEST_SIGBASE( x3,signature_x3_1)
 
 	.attribute unaligned_access, 0
@@ -87,8 +87,56 @@ main:
 
 
 	/*--------------------------MAIN Program-------------------------*/
+#define DATA 0x0						// In bare mood, all the WARL fields must zero by software
+	csrw mie, zero
+  	csrw satp, zero                     // Disable address translation.
+	la   t0, mtvec_handler
+    csrw mtvec, t0						// Write vector table address
 	
+	li t0,0x96969696
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
 
+	li t0, DATA
+	csrw satp, t0
+	csrr t0, satp
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+	
+	li t0,0x96969696
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+
+	/* Goto S mode */
+	la t3, Goto_smode
+	jalr t3
+	ecall
+	li t0,0x96969696
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+
+	li t0, DATA
+	csrw satp, t0
+	csrr t0, satp
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+
+	li t0,0x96969696
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+
+	/* Goto U mode */
+	la t3, Goto_umode
+	jalr t3
+	ecall
+
+	li t0, DATA
+	csrw satp, t0
+	csrr t0, satp
+	RVTEST_SIGUPD(x3,t0,0)
+	addi x3,x3,4
+	
+	
 	j exit
 	
 	
