@@ -89,10 +89,8 @@ main:
                         (((RWX|PMP_L|PMP_TOR)&0xFF) << PMP1_CFG_SHIFT)    	  | \
                         (((RWX|PMP_L|PMP_TOR)&0xFF) << PMP2_CFG_SHIFT)        | \
                         (((RWX|PMP_L|PMP_TOR)&0xFF) << PMP3_CFG_SHIFT))
-                                                
-                        
+                                                                     
 /* Setup some data for testing */
-
 #define DATA_VALUE_FOR_READ1                 0xAAAAAAAA
 #define DATA_VALUE_FOR_READ2                 0xBBBBBBBB
 #define DATA_VALUE_FOR_READ3                 0xCCCCCCCC
@@ -102,131 +100,101 @@ main:
 #define DATA_VALUE_FOR_WRITE3                0x33333333
 #define DATA_VALUE_FOR_WRITE4                0x44444444
 
-
-    /* SET UP DATA IN THE MEMORY */
-
+/* SET UP DATA IN THE MEMORY */
 	LI(a5, RAM_LOCATION_FOR_TEST)
 	LI(a4, DATA_VALUE_FOR_READ1)
 	sw	a4,4(a5)
 	lw	a4,4(a5)
 // VERIFICATION
-    
-        LI(a4, DATA_VALUE_FOR_READ2)
-    	sw a4, 8(a5)
-    	lw a4, 8(a5)
+    LI(a4, DATA_VALUE_FOR_READ2)
+    sw a4, 8(a5)
+    lw a4, 8(a5)
 // VERIFICATION
-
-    	LI(a4, DATA_VALUE_FOR_READ3)
-    	sw a4, 12(a5)
-    	lw a4, 12(a5)
+    LI(a4, DATA_VALUE_FOR_READ3)
+    sw a4, 12(a5)
+    lw a4, 12(a5)
 // VERIFICATION
-
 	LI(a4, DATA_VALUE_FOR_READ4)
-    	sw a4, 16(a5)
-    	lw a4, 16(a5)
+    sw a4, 16(a5)
+    lw a4, 16(a5)
 // VERIFICATION=
-
     /* Assigning addresses to PMP address registers */
-    	LI(a5, REGION0_ADDR)
+    LI(a5, REGION0_ADDR)
 	csrw 	pmpaddr0, a5
 
 	LI(a5, REGION1_ADDR)
 	csrw 	pmpaddr1, a5
 
-    	LI(a5, REGION2_ADDR)
+    LI(a5, REGION2_ADDR)
 	csrw 	pmpaddr2, a5
 
 	LI(a5, REGION3_ADDR)
 	csrw 	pmpaddr3, a5
 
     /* Reading pmp address registers to verify the results */
-
 	csrr 	x2, pmpaddr0
-
 	csrr 	x2, pmpaddr1
-
-    csrr 	x2, pmpaddr2
-	
+    csrr 	x2, pmpaddr2	
     csrr 	x2, pmpaddr3	
 
     /* Decalring pmp configuration register */
-
 	LI(a5, PMPCONFIG0)
 	csrw pmpcfg0, a5
 	csrr x2, pmpcfg0
-	
+
     /* VERIFICATION	
 	READING data from the memory region
     Throws exception if READability is blocked */
-
-    	LI(a5, RAM_LOCATION_FOR_TEST)
-
-    	lw	a4,4(a5)
-
-    	lw	a4,8(a5)
-
-    	lw	a4,12(a5)
-
-    	lw	a4,16(a5)
+    LI(a5, RAM_LOCATION_FOR_TEST)
+    lw	a4,4(a5)
+    lw	a4,8(a5)
+    lw	a4,12(a5)
+    lw	a4,16(a5)
 
     /*WRITING new value to memory region
     Throws exception if the WRITability is blocked */
-
 	LI(a5, RAM_LOCATION_FOR_TEST)
 	LI(a4, DATA_VALUE_FOR_WRITE1)
 	sw	a4,4(a5)
 	lw	a4,4(a5)
 
 	LI(a5, RAM_LOCATION_FOR_TEST)
-    	LI(a4, DATA_VALUE_FOR_WRITE2)
+    LI(a4, DATA_VALUE_FOR_WRITE2)
 	sw	a4,8(a5)
 	lw	a4,8(a5)
 
 	LI(a5, RAM_LOCATION_FOR_TEST)
-    	LI(a4, DATA_VALUE_FOR_WRITE3)
+    LI(a4, DATA_VALUE_FOR_WRITE3)
 	sw	a4,12(a5)
 	lw	a4,12(a5)
 
 	LI(a5, RAM_LOCATION_FOR_TEST)
-    	LI(a4, DATA_VALUE_FOR_WRITE4)
+    LI(a4, DATA_VALUE_FOR_WRITE4)
 	sw	a4,16(a5)
 	lw	a4,16(a5)
 
-
+	/*--------------------------MAIN Program-------------------------*/
 	csrw mie, zero
-  	csrw satp, zero                              // Disable address translation.
+  	csrw satp, zero                              	// Disable address translation.
 	
 	la   t0, mtvec_handler
     csrw mtvec, t0									// Write vector table address
-	
 
 	csrr a5, mstatus
 	RVTEST_SIGUPD(x3,a5,0)
 	addi x3,x3,4
-	# add t0, x0, gp
-	# RVTEST_SIGUPD(x3,t0)
-	ebreak                               # Disable interrupts.
 
-	# csrr a5, mstatus
-	# RVTEST_SIGUPD(x3,a5)
-	li t0,0xabababab
+	ebreak
+
+	/* Goto S mode */
+	la t3, Goto_smode
+	jalr t3
+	
+	ecall
+
+	li t0,0x91234567
 	RVTEST_SIGUPD(x3,t0,0)
 	addi x3,x3,4
-	nop
-	nop
-	//ecall
-	# LI(a5, DATA_VALUE_FOR_WRITE1)
-    # RVTEST_SIGUPD(x3,a5)
-	# csrw 	satp, a5
-
-	# csrr 	a5, satp	
-	# RVTEST_SIGUPD(x3,a5)
-
-	//ebreak
-	# csrr a5, mstatus
-	# RVTEST_SIGUPD(x3,a5)
-
-
 
 	j exit
 	
@@ -234,98 +202,59 @@ main:
  	.align 4
   	.global mtvec_handler
 
+	/* Trap Handler Starts */
 mtvec_handler:
-	
-	addi t5,x0,1
-
-	addi t1, x0, 3
-	addi t2, x0, 0x7
-	
-	csrr a1, mcause
-	RVTEST_SIGUPD(x3,a1,0)
+	// read mcause
+	csrr a7, mcause
+	RVTEST_SIGUPD(x3,a7,0)
 	addi x3,x3,4
-	
-	# csrr a1, sstatus
-	# RVTEST_SIGUPD(x3,a1)
+	// read mstatus
 	csrr t0, mstatus
 	RVTEST_SIGUPD(x3,t0,0)
 	addi x3,x3,4
-	beq t5,t6, end
-
-	beq a1, t2, end
-	bne a1, t1, m_mode
-	
+	// set mepc to return address
 	csrr s0, mepc
-	csrw mscratch,s0
-	
-	la t4, s_mode
-	csrw mepc, t4
-	# csrr t4, mepc
-	# RVTEST_SIGUPD(x3,t4)
-
-	# addi s0,s0,4
-	# csrw mepc, s0
-	# csrw sepc, s0
-	
-	li 		t2, 0x1800
-	csrc	mstatus, t2
-
-	li      t2, 0x800
-    csrs    mstatus, t2
-	
-	
+	addi s0,s0,4
+	csrw mepc, s0
 	csrr 	a1, mepc
 	RVTEST_SIGUPD(x3,a1,0)
 	addi x3,x3,4
-	
-	# csrr 	a1, mstatush
-	# RVTEST_SIGUPD(x3,a1)
-
-	
-
-    # li      t3, 0x800
-    # csrs    mstatus, t3
-	# csrr t0, sstatus
-	# li t0, 1<<8
-	# csrs mstatus, t0
-	
-
+	beq a6, a7, m_mode	// returning to mmode
 	mret
-
-
 m_mode:
-	//j exit
-	addi t6,x0,1
-	csrr s1, mscratch
-	addi s1,s1,4
-	csrw mepc, s1
-	li t0, 0x787878
-	RVTEST_SIGUPD(x3,t0,0)
+	li      t2, 0x1800
+  	csrs    mstatus, t2		// set mstatus.mpp=11
+	csrr 	a1, mstatus
+	RVTEST_SIGUPD(x3,a1,0)
 	addi x3,x3,4
-	csrr t0, sstatus
-	RVTEST_SIGUPD(x3,t0,0)
+	mret	
+	/* Trap Handler ends here  */
+
+Goto_smode:
+	li 		t2, 0x1800
+	csrc	mstatus, t2		// clear mstatus
+	li      t2, 0x800
+    csrs    mstatus, t2		// set mstatus.mpp=01
+
+	csrr t1, mstatus
+	RVTEST_SIGUPD(x3,t1,0)
 	addi x3,x3,4
-	//j exit
+	RVTEST_SIGUPD(x3,x1,0)
+	addi x3,x3,4
+	csrw mepc, x1
 	mret
 
-s_mode:
-	//j exit
-	li t0, 0x121212
+exit:
+	/* Returning to M mode */
+	li a6,0x3
+
+	ebreak
+	ecall
+	li t0,0xbeeeeeef
 	RVTEST_SIGUPD(x3,t0,0)
 	addi x3,x3,4
-	nop
-	ecall
-	
-	
 
-end:
-	li t4, 0x6969669
-	RVTEST_SIGUPD(x3,t4,0)
-	addi x3,x3,4
 
-  	
-exit:	
-	
 #endif
 
  # ---------------------------------------------------------------------------------------------
