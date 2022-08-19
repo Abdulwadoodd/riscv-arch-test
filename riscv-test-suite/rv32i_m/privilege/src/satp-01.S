@@ -2,15 +2,9 @@
 // Copyright (c) 2020. RISC-V International. All rights reserved.
 // SPDX-License-Identifier: BSD-3-Clause
 // -----------
-//
-// This assembly file tests the ejal instruction of the RISC-V I extension.
-// 
 
-/* 
-	satp tests for:
-	* csr access in S, M and U mode.
-	* RW permission of WARL fields in bare mood in M, U and S mode.
- */
+
+/* satp tests for csr access in S, M and U mode. */
 
 
 #include "model_test.h"
