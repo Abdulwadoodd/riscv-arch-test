@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // -----------
 
-/* VM test in sv32 mode where stores are performed when VA!=PA in S mode */
+/* VM test in sv32 mode where stores are performed when VA!=PA in U mode */
 
 #include "model_test.h"
 #include "arch_test.h"
@@ -56,17 +56,13 @@ main:
 #define SATP_REG (SATP32_MODE | (PTE_L1_addr >> 12))
 // setting up Page Table entries
 #define PTE1_L1 ((PTE_L2_addr >> 2) | PTE_V)
-#define PTE0_L2 (PA0 | PTE_V | PTE_X | PTE_A )
-#define PTE1_L2 (PA1 | PTE_V | PTE_R | PTE_W | PTE_D | PTE_A )
+#define PTE0_L2 (PA0 | PTE_V | PTE_X | PTE_A | PTE_U)
+#define PTE1_L2 (PA1 | PTE_V | PTE_R | PTE_W | PTE_D | PTE_A | PTE_U)
 
     csrw mie, zero
   	csrw satp, zero                     // Disable address translation.
 	LA (t0, mtvec_handler)
     csrw mtvec, t0						// Write vector table address
-
-    /* Goto S mode */
-	LA (t3, Goto_smode)
-	jalr t3
     
     LI (t0, PTE_L1_addr)
     LI (t1, 0x800)
@@ -85,6 +81,10 @@ main:
 
     LI (t3, SATP_REG)
     csrw satp, t3       // enable address translation
+
+    /* Goto U mode */
+	LA (t3, Goto_umode)
+	jalr t3
 
     LI (x2, 0x80010104)
 

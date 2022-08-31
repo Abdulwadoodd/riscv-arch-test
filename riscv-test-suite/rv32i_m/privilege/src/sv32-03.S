@@ -3,7 +3,7 @@
 // SPDX-License-Identifier: BSD-3-Clause
 // -----------
 
-/* VM test in sv32 mode where stores are performed when VA!=PA in S mode */
+/* U mode page access in S mode, where stores are performed when VA!=PA */
 
 #include "model_test.h"
 #include "arch_test.h"
@@ -55,14 +55,19 @@ main:
 // satp register for sv32: satp.mode = 1, satp.ppn = PTE_L1_addr
 #define SATP_REG (SATP32_MODE | (PTE_L1_addr >> 12))
 // setting up Page Table entries
-#define PTE1_L1 ((PTE_L2_addr >> 2) | PTE_V)
-#define PTE0_L2 (PA0 | PTE_V | PTE_X | PTE_A )
-#define PTE1_L2 (PA1 | PTE_V | PTE_R | PTE_W | PTE_D | PTE_A )
+#define PTE1_L1 ((PTE_L2_addr >> 2) | PTE_V)     // PTE of root page table
+#define PTE0_L2 (PA0 | PTE_V | PTE_X | PTE_A)  // PTE for pc translation in S mode
+#define PTE1_L2 (PA1 | PTE_V | PTE_R | PTE_W | PTE_D | PTE_A | PTE_U)  // PTE for sw address translation
 
     csrw mie, zero
   	csrw satp, zero                     // Disable address translation.
 	LA (t0, mtvec_handler)
     csrw mtvec, t0						// Write vector table address
+	
+	/* setting mstatus.SUM =1 to get 
+	acccess of U mode pages in S mode */
+	li      t0, MSTATUS_SUM				
+    csrs    mstatus, t0
 
     /* Goto S mode */
 	LA (t3, Goto_smode)
@@ -75,7 +80,7 @@ main:
     sw t1, 0(t0) 
 
     LI (t0, PTE_L2_addr)
-    addi t1,t0, 0x40
+    addi t1,t0, 0x140           // acc to the virtual address to be translated
 
     LI (t4, PTE0_L2)
     sw t4, 0(t0)
@@ -86,7 +91,7 @@ main:
     LI (t3, SATP_REG)
     csrw satp, t3       // enable address translation
 
-    LI (x2, 0x80010104)
+    LI (x2, 0x80050104)         // virtual address for sw (to be translated into PA -> 0x80003XXX)
 
 inst_0:
 // rs1 != rs2, rs1==x15, rs2==x30, rs2_val == (-2**(xlen-1)), imm_val > 0, rs2_val == -2147483648, ea_align == 0 and (imm_val % 4) == 0
@@ -184,7 +189,7 @@ inst_18:
 // opcode: sw; op1:x24; op2:x5; op2val:0x2000; immval:0x400; align:0
 TEST_STORE(x2,x15,0,x24,x5,0x2000,0x400,72,sw,0)
 
-LI (x12, 0x80010150)
+LI (x12, 0x80050150)
 
 inst_19:
 // rs1==x13, rs2==x1, rs2_val == 16384, 
