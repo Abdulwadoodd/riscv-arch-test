@@ -764,3 +764,55 @@ RVTEST_SIGUPD_F(swreg,destreg,flagreg,offset)
    andi tempreg,tempreg,~(3)		;\
     sub x1,x1,tempreg			;\
     RVTEST_SIGUPD(swreg,x1,offset)
+
+//==============================================================================
+// This section define deprecated macro name aliases, just for migration ease
+//==============================================================================
+
+#ifdef RV_COMPLIANCE_RV32M
+  //#warning "RV_COMPLIANCE_RV32M macro will be deprecated."
+  #define RVMODEL_BOOT	;\
+    RVTEST_IO_INIT	;\
+    RV_COMPLIANCE_RV32M ;\
+    RV_COMPLIANCE_CODE_BEGIN
+#endif
+
+#define SWSIG(a, b)
+
+#ifdef RV_COMPLIANCE_DATA_BEGIN
+  //#warning "RV_COMPLIANCE_DATA_BEGIN macro deprecated in v3.x. Please use RVMODEL_DATA_BEGIN instead"
+  #define RVMODEL_DATA_BEGIN;\
+    RV_COMPLIANCE_DATA_BEGIN
+#endif
+
+#ifdef RV_COMPLIANCE_DATA_END
+  //#warning "RV_COMPLIANCE_DATA_END macro deprecated in v3.x. Please use RVMODEL_DATA_END instead"
+  #define RVMODEL_DATA_END;\
+    RV_COMPLIANCE_DATA_END
+#endif
+
+#ifdef RV_COMPLIANCE_HALT
+  //#warning "RV_COMPLIANCE_HALT macro deprecated in v3.x. Please use RVMODEL_HALT instead"
+  #define RVMODEL_HALT;\
+    RV_COMPLIANCE_HALT
+#endif
+
+#ifdef RVTEST_IO_ASSERT_GPR_EQ
+  //#warning "RVTEST_IO_ASSERT_GPR_EQ macro deprecated in v3.x. Please use RVMODEL_IO_ASSERT_GPR_EQ instead"
+  #define RVMODEL_IO_ASSERT_GPR_EQ(_SP, _R, _I);\
+    RVTEST_IO_ASSERT_GPR_EQ(_SP,_R, _I)
+#endif
+
+#ifdef RVTEST_IO_WRITE_STR
+  //#warning "RVTEST_IO_WRITE_STR macro deprecated in v3.x. Please use RVMODEL_IO_WRITE_STR instead"
+  #define RVMODEL_IO_WRITE_STR(_SP, _STR);\
+    RVTEST_IO_WRITE_STR(_SP, _STR)
+#endif
+
+#ifdef RVTEST_IO_INIT
+  //#warning "RVTEST_IO_INIT is deprecated in v3.x. Please use RVMODEL_BOOT for initialization"
+#endif
+
+#ifdef RVTEST_IO_CHECK
+  //#warning "RVTEST_IO_CHECK is deprecated in v3.x.
+#endif
