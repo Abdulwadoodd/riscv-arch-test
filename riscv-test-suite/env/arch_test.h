@@ -956,7 +956,7 @@ sv_\__MODE__\()epc:
 	SREG  t4, 2*REGWIDTH(t1) // save 3rd sig value, (rel mepc) into trap signature area
 adj_\__MODE__\()epc:		 // adj mepc so there is at least 4B of padding after op
 	andi  t6, t2, -0x4	 // adjust mepc to prev 4B alignment
-	addi  t6, t6,  0x8	 // adjust mepc so it skips past op, has padding & 4B aligned
+	addi  t6, t6,  REGWIDTH	 // adjust mepc to mepc+4 (for RV32) and mepc+8 (for RV64) & 4B aligned
 	csrw  CSR_XEPC, t6	 // restore adjusted value, w/ 2,4 or 6B of padding
 
   /****WARNING needs updating when insts>32b are ratified, only 4 or 6B of padding; for 64b insts,  2B or 4B of padding	  ****/
