@@ -3,6 +3,82 @@
 /* They're useful across many tests, but generally for specific classes of ops */
 
 
+// #define STORE_PTE(swreg,rs2_reg,offset_reg,inst) ;\
+// add t6,swreg,offset_reg			;\
+// inst rs2_reg, 0(t6)				;\
+// nop						        ;\
+// nop
+
+// for two level page (old)
+// #define PTE_SETUP_SV32(virtual_addr, physical_addr, permission_reg)    ;\
+//     LA(a0, rvtest_Sroot_pg_tbl)  /* Base address of root page table*/   ;\
+//     LA(s1, rvtest_slvl1_pg_tbl)  /* Base address of level 1 page table */   ;\
+//     srli a1, s1, 2              ;\
+//     ori a1, a1 , (!PTE_D  | !PTE_A | !PTE_U | !PTE_X | !PTE_W | !PTE_R | PTE_V) /* Data to be written in PTE */     ;\
+//     /* Extracting VA[0]: offset to base address of root page  */  ;\
+//     srli a2, virtual_addr,22     ;\
+//     slli a2, a2, 2            ;\
+//     STORE_PTE(a0,a1,a2,sw) /* sw a1, < a2 > (a0)  */       ;\
+//     /*  PTE level 2             */    ;\
+//     srli a1, physical_addr, 12        ;\
+//     slli a1, a1, 12         ;\
+//     srli a1, a1, 2          ;\
+//     or a1, a1, permission_reg  /* Data of PTE */      ;\
+//     /* Extracting VA[1]: offset to base address of level 1 page  */ ;\
+//     slli a2, virtual_addr, 10   ;\
+//     srli a2, a2, 22             ;\
+//     slli a2, a2, 2              ;\
+//     STORE_PTE(s1,a1,a2,sw) /* sw a1, < a2 > (s1)  */ ;\
+//     li x20, 0x54321
+
+// for superpage (old)
+// #define PTE_SETUP_SV32(virtual_addr, physical_addr, permission_reg)    ;\
+//     LA(a0, rvtest_Sroot_pg_tbl)  /* Base address of root page table*/   ;\
+//     srli a0,a0, 12              ;\
+//     slli a0, a0, 12  /* Clearing lower 12 bits */           ;\
+//     srli a1, physical_addr, 12        ;\
+//     slli a1, a1, 10         ;\
+//     or a1, a1, permission_reg  /* Data of PTE */      ;\
+//     /* Extracting VA[0]: offset to base address of root page  */  ;\
+//     srli a2, virtual_addr,22     ;\
+//     slli a2, a2, 2            ;\
+//     STORE_PTE(a0,a1,a2,sw) /* sw a1, < a2 > (a0)  */       ;\
+
+
+// sv32_dev(a0, a1, t0, t1, t2, 0x80000000, 1)
+#define PTE_SETUP_SV32(_PAR, _PR, _TR0, _TR1, _TR2, VA, level)        ;\
+    LA(_TR1, rvtest_Sroot_pg_tbl)  /* Base address of root page table*/   ;\
+    .set va_offset, (VA>>22)<<2                                 ;\
+    LI(_TR0, va_offset)                                         ;\
+    add _TR1, _TR1, _TR0                                        ;\
+    .if (level==1)                                              ;\
+        srli _PAR, _PAR, 12                                     ;\
+        slli _PAR, _PAR, 10                                     ;\
+        or _PAR, _PAR, _PR                                      ;\
+        LA(_TR2, rvtest_slvl1_pg_tbl)                           ;\
+        srli _TR0, _TR2, 2                                      ;\
+        ori _TR0, _TR0, (!PTE_D  | !PTE_A | !PTE_U | !PTE_X | !PTE_W | !PTE_R | PTE_V);\
+        SREG _TR0, 0(_TR1)                                      ;\
+        LI(_TR0, VA)                                            ;\
+        slli _TR0, _TR0, 10                                     ;\
+        srli _TR0, _TR0, 22                                     ;\
+        slli _TR0, _TR0, 2                                      ;\
+        add _TR2, _TR2, _TR0                                    ;\
+        SREG _PAR, 0(_TR2)                                      ;\
+    .else ;\
+        srli _PAR, _PAR, 22                                     ;\
+        slli _PAR, _PAR, 20                                     ;\
+        or _PAR, _PAR, _PR                                      ;\
+        SREG _PAR, 0(_TR1)                                      ;\
+    .endif
+
+#define SATP_SETUP ;\
+    LA(t6, rvtest_Sroot_pg_tbl) ;\
+    LI(t5, SATP32_MODE) ;\
+    srli t6, t6, 12 ;\
+    or t6, t6, t5  ;\
+    csrw satp, t6   ;\
+
 #define NAN_BOXED(__val__,__width__,__max__)	;\
     .if __width__ == 32				;\
 	.word __val__				;\

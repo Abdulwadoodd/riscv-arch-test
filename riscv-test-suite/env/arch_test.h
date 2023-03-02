@@ -700,8 +700,10 @@ RVMODEL_DATA_END        /* model specific stuff */
 #define VSmode  0x5
 #define Smode   0x1
 #define Umode   0x0
+#define Sv32    0x1
+#define VA 0x90000000
 
-.macro RVTEST_GOTO_LOWER_MODE LMODE
+.macro RVTEST_GOTO_LOWER_MODE LMODE, VM_EN=0
 .option push
 .option norvc
 
@@ -743,11 +745,21 @@ RVMODEL_DATA_END        /* model specific stuff */
   .endif
 .endif
         /**** mstatus MPV and PP now set up to desired mode    ****/
-        /**** set MEPC to mret+4; requires an identity mapping ****/
-  auipc t4, 0
-  addi  t4, t4, 4*WDSZ
-  csrrw t4, CSR_MEPC, t4        /* set rtn addr to mret+4               */
-  mret                          /* transition to desired mode           */
+.if(\VM_EN\()==Sv32)
+/**** set MEPC to Virtual address when VM is enabled: sv32 address transalation scheme  ****/
+   LI(  t0, VA)
+   LA(  t4, vm_en)
+   slli t4,t4, 10
+   srli t4,t4, 10
+   or t4,t4,t0
+   csrrw t4, CSR_MEPC, t4
+.else
+/**** set MEPC to mret+4; VM disabled: identity mapping ****/
+   auipc t4, 0
+   addi  t4, t4, 4*WDSZ
+   csrrw t4, CSR_MEPC, t4        /* set rtn addr to mret+4               */
+.endif
+   mret                          /* transition to desired mode           */
 .option pop
 .endm
 
