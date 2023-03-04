@@ -32,7 +32,8 @@ main:
 	li a4, 0xbeed
 	RVTEST_SIGUPD(x13,a4)
 #endif
-
+	
+	csrr sp, mscratch
 
 	li t2, -1		// WHOLE PHYSICAL MEMORY AS SINGLE REGION
 	csrw pmpaddr0, t2
@@ -40,13 +41,17 @@ main:
 	csrw pmpcfg0, t2
 	// write satp with all zeros (bare mode)
 	csrw satp, x0
+# 	old va = 0x80000000
+# 	new va = 0x90000000 
 
-	# VA = 0x90000000
-    # li a1,(PTE_V | PTE_X | PTE_A | PTE_R)   // permissions for PTE to for address instruction of instruction memory
-   	# PTE_SETUP_SV32(a0, a1, t0, t1, t2, VA, 0)
+	.set va, 0x90000000
+	.set old_va, 0x80000000 
+	li a0,0x80000000 
+    li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
+   	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 0)
 	
-	li a1,(PTE_V | PTE_X | PTE_A | PTE_R | PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
-	li a0,0x80000000        // virtual address
+	#li a1,(PTE_V | PTE_X | PTE_A | PTE_R | PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
+	#li a0,0x80000000        // virtual address
 	/*
 	a0 contain physical address,
 	a1 contain permissions
@@ -64,7 +69,38 @@ main:
 	li t1, 0xABCFFFFF
 	RVTEST_SIGUPD(x13, t1)
 
+
+
 	SATP_SETUP
+
+	LI(t0, va-old_va)
+	csrr sp, mscratch
+	add t1,sp,t0
+	csrw sscratch, t1
+	// data
+	LREG t1, data_bgn_off+0*sv_area_sz(sp)
+	add t2, t1,t0
+	SREG t2, data_bgn_off+1*sv_area_sz(sp)
+	LREG t1, data_end_off+1*sv_area_sz(sp)
+	add t1,t1,t0
+	SREG t1, data_end_off+1*sv_area_sz(sp)
+	//code 
+	LREG t1, code_bgn_off+0*sv_area_sz(sp)
+	add t2, t1,t0
+	SREG t2, code_bgn_off+1*sv_area_sz(sp)
+	LREG t1, code_end_off+1*sv_area_sz(sp)
+	add t1,t1,t0
+	SREG t1, code_end_off+1*sv_area_sz(sp)
+	//signature
+	LREG t1, sig_bgn_off+0*sv_area_sz(sp)
+	add t2, t1,t0
+	SREG t2, sig_bgn_off+1*sv_area_sz(sp)
+	LREG t1, sig_end_off+1*sv_area_sz(sp)
+	add t1,t1,t0
+	SREG t1, sig_end_off+1*sv_area_sz(sp)
+
+
+	
 	RVTEST_GOTO_LOWER_MODE	Smode		   // Switching to S mode
 
 

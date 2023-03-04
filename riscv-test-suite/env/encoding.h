@@ -820,6 +820,7 @@
 #define CSR_SATP 0x180
 #define CSR_SEDELEG 0x102
 #define CSR_MSTATUS 0x300
+#define CSR_MSTATUSH 0x310
 #define CSR_MISA 0x301
 #define CSR_MEDELEG 0x302
 #define CSR_MIDELEG 0x303
