@@ -41,26 +41,12 @@ main:
 	csrw pmpcfg0, t2
 	// write satp with all zeros (bare mode)
 	csrw satp, x0
-# 	old va = 0x80000000
-# 	new va = 0x90000000 
 
 	.set va, 0x90000000
 	.set old_va, 0x80000000 
 	li a0,0x80000000 
     li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
-   	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 0)
-	
-	#li a1,(PTE_V | PTE_X | PTE_A | PTE_R | PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
-	#li a0,0x80000000        // virtual address
-	/*
-	a0 contain physical address,
-	a1 contain permissions
-	t0,t1,t2 are test registers
-	0x80000000 is virtual address
-	0 represent no. of translation levels. (only root page table).
-	*/
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x80000000, 0)
-
+   	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 1)
 
     la a0, signature_x13_1      // physical address
     li a1, (PTE_V | PTE_A | PTE_R | PTE_W | PTE_D)    // permissions
@@ -105,7 +91,7 @@ main:
 
 
 vm_en:
-	li t0, 0x81005000
+	li t0, 0x8100611C
     li t1, 0xFDABC 
     sw t1, 0(t0)
 	
@@ -125,13 +111,7 @@ RVTEST_CODE_END
 RVMODEL_HALT
 
 RVTEST_DATA_BEGIN
-.align 4
 
-rvtest_data:
-.word 0xbabecafe
-.word 0xbabecafe
-.word 0xbabecafe
-.word 0xbabecafe
 RVTEST_DATA_END
 #ifdef rvtest_strap_routine
 .align 12
@@ -142,21 +122,14 @@ RVTEST_DATA_END
 RVMODEL_DATA_BEGIN
 rvtest_sig_begin:
 
-signature_x1_0:
-    .fill 0*(XLEN/32),4,0xdeadbeef
-
+// test signatures initialization
 signature_x13_1:
     .fill 10*(XLEN/32),4,0xcafebeef
 
-
+// trap signatures initialization
 #ifdef rvtest_mtrap_routine
 mtrap_sigptr:
     .fill 10*(XLEN/32),4,0xdeadbeef
-#endif
-
-#ifdef rvtest_gpr_save
-gpr_save:
-    .fill 32*(XLEN/32),4,0xdeadbeef
 #endif
 
 rvtest_sig_end:
