@@ -255,6 +255,8 @@
 #define xtvec_sav_off        (tramp_sz+13*8)  //  (tvec_save      -Mtrapreg_sv)
 #define xscr_save_off        (tramp_sz+14*8)  //  (scratch_save   -Mtrapreg_sv)
 #define trap_sv_off          (tramp_sz+15*8)  //  (trapreg_sv     -Mtrapreg_sv)
+#define vmem_bgn_off         (tramp_sz+16*8)  //  (vmem_bgn_ptr   -Mtrapreg_sv)
+#define vmem_end_off         (tramp_sz+17*8)  //  (vmem_end_ptr   -Mtrapreg_sv)
 
 //==============================================================================
 // this section has  general test helper macros, required,  optional, or just useful
@@ -1498,7 +1500,7 @@ rvtest_\__MODE__\()end:
 .rept (tramp_sz>>2)             // size in words (technically, legnth of j op)
         j       .+0             // prototype jump instruction, offset to be filled in
 .endr
-#define ptrsv_sz        (15*8)
+#define ptrsv_sz        (17*8)
 \__MODE__\()code_bgn_ptr:
         .dword rvtest_code_begin// pointer to code bgn area using this mode's mapping trampsvend+0
 \__MODE__\()code_end_ptr:
@@ -1530,6 +1532,11 @@ rvtest_\__MODE__\()end:
         .dword  0               // save area for incoming mtvec            trampsvend+13
 \__MODE__\()scratch_save:
         .dword  0               // save area for incoming mscratch          trampsvend+14
+\__MODE__\()vmem_bgn_ptr:
+        .dword rvtest_data_begin// pointer to data bgn area using this mode's mapping trampsvend+15
+\__MODE__\()vmem_end_ptr:
+        .dword rvtest_data_end  // pointer to data end area using this mode's mapping trampsvend+16
+
 \__MODE__\()trapreg_sv:         //****GLOBAL:*****
         .fill   8, REGWIDTH, 0xdeadbeef     // handler regsave area, t1..t6,sp +1 extra, keep dbl alignment trampsvend+15
 \__MODE__\()sv_area_end:        // used to calc size, which is used to avoid CSR read trampsvend+15+8
@@ -1662,7 +1669,6 @@ rvtest_data_begin:
   mtrap_sigptr:
     .fill 2,4,0xdeadbeef
  #endif
- rvtest_data_end:
 
 /**** create identity mapped page tables here if mmu is present ****/
 .align 12
@@ -1678,4 +1684,5 @@ rvtest_data_begin:
     #endif
   #endif
 #endif
+rvtest_data_end:
 .endm
