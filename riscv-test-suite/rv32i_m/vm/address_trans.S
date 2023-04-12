@@ -7,7 +7,7 @@
 // 
 
 #include "model_test.h"
-#include "arch_test.h"
+#include "arch_testPR318i.h"
 
 RVTEST_ISA("RV32I")
 
@@ -33,8 +33,6 @@ main:
 	RVTEST_SIGUPD(x13,a4)
 #endif
 	
-	csrr sp, mscratch
-
 	li t2, -1		// WHOLE PHYSICAL MEMORY AS SINGLE REGION
 	csrw pmpaddr0, t2
 	li t2, 0x8F		// TOR MODE WITH LOCK BIT ON; WIll write in terms of MACROS later
@@ -43,58 +41,63 @@ main:
 	csrw satp, x0
 
 	.set va, 0x90000000
-	.set old_va, 0x80000000 
-	li a0,0x80000000 
+	.set pa, 0x80000000 
+	li a0,pa 
     li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
    	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 1)
 
-    la a0, signature_x13_1      // physical address
-    li a1, (PTE_V | PTE_A | PTE_R | PTE_W | PTE_D)    // permissions
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x81000000, 0)
+    la a0, my_test_data      // physical address
+    li a1, (PTE_V | PTE_A | PTE_X)    // permissions
+	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x71000000, 0)
 
 	li t1, 0xABCFFFFF
 	RVTEST_SIGUPD(x13, t1)
 
-
-
 	SATP_SETUP
 
-	LI(t0, va-old_va)
+	la t1,my_test_data
+	li t4, 0x71000000
+	sub t4, t4, t1
+	LI(t0, va-pa)
 	csrr sp, mscratch
 	add t1,sp,t0
 	csrw sscratch, t1
 	// data
 	LREG t1, data_bgn_off+0*sv_area_sz(sp)
-	add t2, t1,t0
+	add  t2, t1,t4
 	SREG t2, data_bgn_off+1*sv_area_sz(sp)
-	LREG t1, data_end_off+1*sv_area_sz(sp)
-	add t1,t1,t0
-	SREG t1, data_end_off+1*sv_area_sz(sp)
 	//code 
 	LREG t1, code_bgn_off+0*sv_area_sz(sp)
 	add t2, t1,t0
 	SREG t2, code_bgn_off+1*sv_area_sz(sp)
-	LREG t1, code_end_off+1*sv_area_sz(sp)
-	add t1,t1,t0
-	SREG t1, code_end_off+1*sv_area_sz(sp)
 	//signature
 	LREG t1, sig_bgn_off+0*sv_area_sz(sp)
-	add t2, t1,t0
+	add t2, t1, t0
 	SREG t2, sig_bgn_off+1*sv_area_sz(sp)
-	LREG t1, sig_end_off+1*sv_area_sz(sp)
-	add t1,t1,t0
-	SREG t1, sig_end_off+1*sv_area_sz(sp)
+	//VM
+	LREG t1, vmem_bgn_off+0*sv_area_sz(sp)
+	add t2, t1,t0
+	SREG t2, vmem_bgn_off+1*sv_area_sz(sp)
 
+	// set mstatus.MXR: make eXecuteable Readable)
+	//li t1, MSTATUS_MXR
+	//csrs mstatus, t1
 
+	// set mstatus.SUM 
+	# li t1, MSTATUS_SUM
+	# csrs mstatus, t1
 	
 	RVTEST_GOTO_LOWER_MODE	Smode		   // Switching to S mode
 
-
 vm_en:
-	li t0, 0x8100611C
+	li t0, 0x7100011C
     li t1, 0xFDABC 
-    sw t1, 0(t0)
-	
+    lw t1, 0(t0)
+	// check if this instruction executed after trap
+	li t2, 0xFFFF0000
+	li t2, 0xFFFF0001
+	li t2, 0xFFFF0002
+
 	RVTEST_GOTO_MMODE		// Switching back to M mode
 
 mmode:
@@ -103,7 +106,6 @@ mmode:
 	csrr a4, pmpaddr1
 	RVTEST_SIGUPD(x13,a4)
 
-
 #endif
 
  # ---------------------------------------------------------------------------------------------
@@ -111,6 +113,8 @@ RVTEST_CODE_END
 RVMODEL_HALT
 
 RVTEST_DATA_BEGIN
+my_test_data:
+	.fill 5*(XLEN/32),4,0x123456FF
 
 RVTEST_DATA_END
 #ifdef rvtest_strap_routine
