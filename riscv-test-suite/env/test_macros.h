@@ -57,7 +57,7 @@
         or _PAR, _PAR, _PR                                      ;\
         LA(_TR2, rvtest_slvl1_pg_tbl)                           ;\
         srli _TR0, _TR2, 2                                      ;\
-        ori _TR0, _TR0, (!PTE_D  | !PTE_A | !PTE_U | !PTE_X | !PTE_W | !PTE_R | PTE_V);\
+        ori _TR0, _TR0, PTE_V                                   ;\
         SREG _TR0, 0(_TR1)                                      ;\
         LI(_TR0, VA)                                            ;\
         slli _TR0, _TR0, 10                                     ;\
