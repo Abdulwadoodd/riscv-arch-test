@@ -7,7 +7,7 @@
 // 
 
 #include "model_test.h"
-#include "arch_testPR318i.h"
+#include "arch_test.h"
 
 RVTEST_ISA("RV32I")
 
@@ -44,17 +44,18 @@ main:
 	.set pa, 0x80000000 
 	li a0,pa 
     li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
-   	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 1)
+   	// PTE setup for Instruction memory 0x90000000 -> 0x80000000
+	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 1)
 
-    la a0, my_test_data      // physical address
+    la a0, my_test_data      		   // physical address
     li a1, (PTE_V | PTE_A | PTE_X)    // permissions
+	// PTE setup for Data region 	0x710000000
 	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x71000000, 0)
-
-	li t1, 0xABCFFFFF
-	RVTEST_SIGUPD(x13, t1)
 
 	SATP_SETUP
 
+	/* Save Virtual addresses in of Code and Data 
+	 in their respective S-mode save area */
 	la t1,my_test_data
 	li t4, 0x71000000
 	sub t4, t4, t1
@@ -71,13 +72,13 @@ main:
 	add t2, t1,t0
 	SREG t2, code_bgn_off+1*sv_area_sz(sp)
 	//signature
-	LREG t1, sig_bgn_off+0*sv_area_sz(sp)
-	add t2, t1, t0
-	SREG t2, sig_bgn_off+1*sv_area_sz(sp)
+	//LREG t1, sig_bgn_off+0*sv_area_sz(sp)
+	//add t2, t1, t0
+	//SREG t2, sig_bgn_off+1*sv_area_sz(sp)
 	//VM
-	LREG t1, vmem_bgn_off+0*sv_area_sz(sp)
-	add t2, t1,t0
-	SREG t2, vmem_bgn_off+1*sv_area_sz(sp)
+	//LREG t1, vmem_bgn_off+0*sv_area_sz(sp)
+	//add t2, t1,t0
+	//SREG t2, vmem_bgn_off+1*sv_area_sz(sp)
 
 	// set mstatus.MXR: make eXecuteable Readable)
 	//li t1, MSTATUS_MXR
@@ -92,11 +93,12 @@ main:
 vm_en:
 	li t0, 0x7100011C
     li t1, 0xFDABC 
-    lw t1, 0(t0)
-	// check if this instruction executed after trap
-	li t2, 0xFFFF0000
+    lw t1, 0(t0) // must be trapped: Dump 4 words in signatures
+	nop
+	// Trap must return on Virtual addr of following instructions
+	li t1, 0xFFFF7890
 	li t2, 0xFFFF0001
-	li t2, 0xFFFF0002
+	li t1, 0xFFFF0002
 
 	RVTEST_GOTO_MMODE		// Switching back to M mode
 
@@ -114,7 +116,7 @@ RVMODEL_HALT
 
 RVTEST_DATA_BEGIN
 my_test_data:
-	.fill 5*(XLEN/32),4,0x123456FF
+	.fill 1*(XLEN/32),4,0x123456FF
 
 RVTEST_DATA_END
 #ifdef rvtest_strap_routine
@@ -128,12 +130,12 @@ rvtest_sig_begin:
 
 // test signatures initialization
 signature_x13_1:
-    .fill 10*(XLEN/32),4,0xcafebeef
+    .fill 8*(XLEN/32),4,0xcafebeef
 
 // trap signatures initialization
 #ifdef rvtest_mtrap_routine
 mtrap_sigptr:
-    .fill 10*(XLEN/32),4,0xdeadbeef
+    .fill 8*(XLEN/32),4,0xdeadbeef
 #endif
 
 rvtest_sig_end:

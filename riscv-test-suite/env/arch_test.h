@@ -233,30 +233,29 @@
 #define sv_area_sz      (tramp_sz + ptr_sv_sz +reg_sv_sz)
 #define int_hndlr_tblsz (XLEN*2*WDBYTSZ)
 /*
-#define sv_area_sz      (Msv_area_end-Mtramptbl_sv)           //sv_area start with aligned tramp_tbl
-#define tramp_sz        (((common_Mentry-Mtrampoline)+4)& -8) // #ops from Mend..Mentry, forced to dblword size
+//#define sv_area_sz      (Msv_area_end-Mtramptbl_sv)           //sv_area start with aligned tramp_tbl
+//#define tramp_sz        (((common_Mentry-Mtrampoline)+4)& -8) // #ops from Mend..Mentry, forced to dblword size
 */
 //define a fixed offsets into the save area
-#define tramp_sv_off         ( 0*8)           // (Mtramptbl_sv    -Mtrapreg_sv) algned to dblwd
-#define code_bgn_off         (tramp_sz+ 0*8)  // (Mcode_bgn_ptr   -Mtrapreg_sv)
-#define code_end_off         (tramp_sz+ 1*8)  // (Mcode_end_ptr   -Mtrapreg_sv)
-#define data_bgn_off         (tramp_sz+ 2*8)  // (Mdata_bgn_ptr   -Mtrapreg_sv)
-#define data_end_off         (tramp_sz+ 3*8)  // (Mdata_end_ptr   -Mtrapreg_sv)
-#define sig_bgn_off          (tramp_sz+ 4*8)  // ( Msig_bgn_ptr   -Mtrapreg_sv)
-#define sig_end_off          (tramp_sz+ 5*8)  // ( Msig_end_ptr   -Mtrapreg_sv)
-#define trapsig_ptr_off      (tramp_sz+ 6*8)  // (Mtrap_sig       -Mtrapreg_sv)
-#define trapsig_ptr_off_init (tramp_sz+ 7*8)  // (Mtrap_sig_init  -Mtrapreg_sv)
+#define tramp_sv_off                  ( 0*8)  // (Mtramptbl_sv    -Mtrapreg_sv) algned to dblwd
 
-#define xsatp_sv_off         (tramp_sz+ 8*8)  //  (Msatp_sv       -Mtrapreg_sv)
-#define mode_rtn_off         (tramp_sz+ 9*8)  //  (Mmode_rtn      -Mtrapreg_sv)
+#define code_bgn_off         (tramp_sz+ 0*8)  // (Mcode_bgn_ptr   -Mtrapreg_sv)
+#define code_seg_siz         (tramp_sz+ 1*8)  // (Mcode_seg_siz   -Mtrapreg_sv)
+#define data_bgn_off         (tramp_sz+ 2*8)  // (Mdata_bgn_ptr   -Mtrapreg_sv)
+#define data_seg_siz         (tramp_sz+ 3*8)  // (Mdata_seg_siz   -Mtrapreg_sv)
+#define sig_bgn_off          (tramp_sz+ 4*8)  // ( Msig_bgn_ptr   -Mtrapreg_sv)
+#define sig_seg_siz          (tramp_sz+ 5*8)  // ( Msig_seg_siz   -Mtrapreg_sv)
+#define vmem_bgn_off         (tramp_sz+ 6*8)  // (Mvmem_bgn_ptr   -Mtrapreg_sv)
+#define vmem_seg_siz         (tramp_sz+ 7*8)  // (Mvmem_seg_siz   -Mtrapreg_sv)
+
+#define trapsig_ptr_off      (tramp_sz+ 8*8)  //  (Mtrap_sig      -Mtrapreg_sv)
+#define xsatp_sv_off         (tramp_sz+ 9*8)  //  (Msatp_sv       -Mtrapreg_sv)
 #define trampend_addr        (tramp_sz+10*8)  //  (Mtrampend_sv   -Mtrapreg_sv) 
 #define xedeleg_sv_off       (tramp_sz+11*8)  //  (Medeleg_sv     -Mtrapreg_sv)
 #define xtvec_new_off        (tramp_sz+12*8)  //  (tvec_new       -Mtrapreg_sv)
 #define xtvec_sav_off        (tramp_sz+13*8)  //  (tvec_save      -Mtrapreg_sv)
 #define xscr_save_off        (tramp_sz+14*8)  //  (scratch_save   -Mtrapreg_sv)
 #define trap_sv_off          (tramp_sz+15*8)  //  (trapreg_sv     -Mtrapreg_sv)
-#define vmem_bgn_off         (tramp_sz+16*8)  //  (vmem_bgn_ptr   -Mtrapreg_sv)
-#define vmem_end_off         (tramp_sz+17*8)  //  (vmem_end_ptr   -Mtrapreg_sv)
 
 //==============================================================================
 // this section has  general test helper macros, required,  optional, or just useful
@@ -646,13 +645,14 @@ RVMODEL_DATA_END        /* model specific stuff */
 .option push
 .option norvc
 #ifdef  rvtest_mtrap_routine    /**** this can be empty if no Umode ****/
-    li   t2, 0	                /* Ecall w/t2=0 is handled specially to rtn here */
+    li   x2, 0                  /* Ecall w/t2=0 is handled specially to rtn here */
 // Note that if illegal op trap is delegated , this may infinite loop
 // The solution is either for test to disable delegation, or to
 // redefine the GOTO_M_OP to be an op that will trap vertically
 
-    GOTO_M_OP                   /* illegal op if < Mmode , else falls through*/
-                                /* fallthru to here when csrr  succeeds      */
+    GOTO_M_OP                   /* ECALL: traps always, but returns immediately to */
+                                /* the next op if t2=0, else handles trap normally */
+
  #endif
 .option pop
 .endm
@@ -713,6 +713,7 @@ RVMODEL_DATA_END        /* model specific stuff */
     csrs CSR_MSTATUS, t4        /* set correct mode and Vbit            */
   .endif
 #endif
+  csrr   sp, CSR_MSCRATCH       /* ensure sp points to Mmode datae area */
         /**** mstatus MPV and PP now set up to desired mode    ****/
         /**** set MEPC to mret+4; requires relocating the pc   ****/
 .if     (\LMODE\() == Vmode)     // get trapsig_ptr & init val up 2 save areas (M<-S<-V)
@@ -826,7 +827,7 @@ RVMODEL_DATA_END        /* model specific stuff */
 
         XCSR_VRENAME \__MODE__          //retarget XCSR names to this modes CSRs, separate V/S copies
 
-        LA(     t1, \__MODE__\()tramptbl_sv)    // get  ptr tos ave area (will be stored in xSCRATCH)
+        LA(     t1, \__MODE__\()tramptbl_sv)    // get  ptr to save area (will be stored in xSCRATCH)
 //----------------------------------------------------------------------
 init_\__MODE__\()scratch:
         csrrw   t3, CSR_XSCRATCH, t1    // swap xscratch with save area ptr (will be used by handler)
@@ -997,13 +998,13 @@ common_\__MODE__\()entry:
         SREG    t2, trap_sv_off+2*REGWIDTH(sp)  //x7
         SREG    t1, trap_sv_off+1*REGWIDTH(sp)  //x6  save other temporaries
 
-//spcl case handling for ECALL in GOTO_MMODE mode, ==10-11 (can't be 8, don't do M->Mmode)
+//spcl case handling for ECALL in GOTO_MMODE mode,)  ****tests can't use ECALL t2=0****
 spcl_\__MODE__\()2mmode_test:
         csrr    t5, CSR_XCAUSE
-	addi	t4, t5, -8			// is cause 8..11?
-        andi	t4, t4, -4                     // NOTE: cause 10 is resered, but Sail will diverge   
+        addi    t4, t5, -8                      // is cause 8..11? Mmode should avoid ECALL 0
+        andi    t4, t4, -4                      // NOTE: cause 10 is RSVD.  Sail will diverge, but buggy anyway  
         bnez    t4, \__MODE__\()trapsig_ptr_upd // no, not in special mode, just continue
-        beqz    t2,  rtn2mmode                  // spcl code 0 in t2, must in spcl goto_mmode mode
+        beqz    s2,  rtn2mmode                  // spcl code 0 in t2 == spcl ECALL goto_mmode, just rtn after ECALL
 //------pre-update trap_sig pointer so handlers can themselves trap-----
 \__MODE__\()trapsig_ptr_upd:                    // calculate entry size based on int vs. excpt, int type, and h mode
         li      t2, 4*REGWIDTH                  // standard entry length
@@ -1040,20 +1041,17 @@ rvtest_\__MODE__\()endtest:                     // target may be too far away, s
         // Xtrap_sigptr (current priv mode) are in the save area ponted to by sp
         // ****FIXME - this breaks if the signature area cross a page boundary and the mapping isn't contiguous
 
-//------this should be atomic-------------------------------------
-.if     (\__MODE__\() == V)                     // get trapsig_ptr val up 2 save areas (M<-S<-V)
-        LREG    t1, -2*sv_area_sz+trapsig_ptr_off(sp)
-        add     t4, t1, t2
-        SREG    t4, -2*sv_area_sz+trapsig_ptr_off(sp)
-.elseif (\__MODE__\() == S)                     // get trapsig_ptr val  up 1 save areas (M<-S)
-        LREG    t1, -1*sv_area_sz+trapsig_ptr_off(sp)
-        add     t4, t1, t2
-        SREG    t4, -1*sv_area_sz+trapsig_ptr_off(sp)
-.else                                           // get trapsig ptr val for this Mmode,  (M)
-        LREG    t1, -0*sv_area_sz+trapsig_ptr_off(sp)
-        add     t4, t1, t2
-        SREG    t4, -0*sv_area_sz+trapsig_ptr_off(sp)
+        .set sv_area_off, (-0*sv_area_sz)       // get trapsig ptr val offset  for Mmode, (M)
+.if     (\__MODE__\() == S)
+        .set sv_area_off, (-1*sv_area_sz)       // get trapsig_ptr val  up 1 save areas   (M<-S)
+.elseif (\__MODE__\() == V)
+        .set sv_area_off, (-2*sv_area_sz)       // get trapsig ptr val  up 2 save areas,  (M<-S<-V))
 .endif
+//------this should be atomic-------------------------------------
+        LREG    t1, sv_area_off+trapsig_ptr_off(sp)
+        add     t4, t1, t2
+        SREG    t4, sv_area_off+trapsig_ptr_off(sp)
+
 //------end atomic------------------------------------------------
 
         LREG    t3, xtvec_new_off(sp)           // get pointer to actual tramp table
@@ -1089,26 +1087,79 @@ sv_\__MODE__\()cause:
   /*******************************************************************************/
 
 common_\__MODE__\()excpt_handler:
-        andi    t5, t5, EXCPT_CAUSE_MSK
-        csrr    t2, CSR_XEPC
 
+  //********************************************************************************
+  // calculate the delta between trap mode and handler mode sv areas & add to sp
+  // This code calculates this table: (X conditions not possible & are ignored )
+  // +-----------+--------+--------+-----+
+  // |Hndlr Mode | MPP==3 | xPV==0 | ==1 |
+  // +-----------+--------+--------+-----+
+  // |    M      | 0 *    | 1 *    | 2 * | sv_area_sz (prev priv can be M, S, or V)
+  // | [H]S, U   | X      | 0 *    | 1 * | sv_area_sz (prev priv S or V if this is S/U)
+  // |   VS,VU   | X      | X      | 0 * | sv_area_sz (prev priv is   V if this is V)  
+  // +-----------+-----------------+-----+
+  // lvs result in t4 to be used during relocation, (so doesn't touch sp)
+  // can use t3, t6 because relocation will overwrite them
+  //********************************************************************************
+        mv      t4, sp                  /* default reloc offset = 0*sv_area_sz  */
+
+  // handle row 3:if Vmode handler, this must be horiz trap, lv default value
+.if (\__MODE__\() != V)                 /* skip the rest if in VS handler       */
+
+ // handle row1,MPP==11; if this is  Mmode; can't happen in other modes
+  .if (\__MODE__\() == M)               /* vert trap into Mmode, min off= *1    */
+        csrr    t6, CSR_MSTATUS
+        slli    t3, t6, XLEN-MPP_LSB-2  /* move mpp into msb                    */
+        bltz    t3, vmem_adj_\__MODE__\()epc /* mpp!=0, lv dflt value           */
+ // handle row1,MPP!=11; check MPV in either of 2 CSRs and positions
+        addi    t4, t4, sv_area_sz      /* upd offset to be at least sv_area_sz */
+    #if (XLEN==32)                      /* now get Vbit into correct position   */
+        csrr    t6, CSR_MSTATUSH        /* get half of status with V-bit        */
+    #else
+        srli    t6, t6, 32		/* reposition mstatus for RV64          */
+    #endif
+        slli    t6, t6, WDSZ-MPV_LSB-1  /* but V into MSB ****FIXME if RV128?****/ 
+        bgez    t6, vmem_adj_\__MODE__\()epc /* V==0, ~virtualized, use *0,1 off*/
+        addi    t4, t4, sv_area_sz      /* upd offset to be 1,2*sv_area_sz      */
+  .else                                 /* S-or-HSmode, now get spv             */
+	
+ // now handle row2, [H]Smode; assumes misa.H is set is hypervisor implemented
+    #ifdef rvtest_vtrap_routine         /******FIXME: needs bkdoor to misa.H ****/
+	csrr    t6, CSR_HSTATUS         /* HS: hstatus exists only if H-ext     */
+        slli    t6, t6, WDSZ-MPV_LSB-1  /* but V into MSB ****FIXME if RV128?****/ 
+        bgez    t6, vmem_adj_\__MODE__\()epc /* V==0, ~virtualized, use *0,1 off*/
+        addi    t4, t4, sv_area_sz      /* upd offset to be 1,2*sv_area_sz      */
+    #endif
+  .endif
+.endif  
+  //********************************************************************************
+vmem_adj_\__MODE__\()epc:          /* t4 now points to sv area of trapping mode */
+        csrr    t2, CSR_XEPC
+        LREG    t3, vmem_bgn_off(t4)            // see if epc is in the vmem area
+        LREG    t6, vmem_seg_siz(t4)
+        add     t6, t6, t3                      // construct vmem seg end
+        bgeu    t2, t6, code_adj_\__MODE__\()epc// epc > rvtest_vmem_end, try data adj
+        bgeu    t2, t3,      adj_\__MODE__\()epc// epc >=rvtest_vmem_begin, adj and save
+        
 code_adj_\__MODE__\()epc:
-        LREG    t3, code_bgn_off(sp)            // see if epc is in the code area
-        LREG    t6, code_end_off(sp)
+        LREG    t3, code_bgn_off(t4)            // see if epc is in the code area
+        LREG    t6, code_seg_siz(t4)
+        add     t6, t6, t3                      // construct code seg end
         bgeu    t2, t6, data_adj_\__MODE__\()epc// epc > rvtest_code_end, try data adj
         bgeu    t2, t3,      adj_\__MODE__\()epc// epc >=rvtest_code_begin, adj and save
 
 data_adj_\__MODE__\()epc:
-        LREG    t3, data_bgn_off(sp)            // see if epc is in the data area
-        LREG    t6, data_end_off(sp)
+        LREG    t3, data_bgn_off(t4)            // see if epc is in the data area
+        LREG    t6, data_seg_siz(t4)
+        add     t6, t6, t3                      // construct data seg end
         bgeu    t2, t6, cleanup_epilogs         // mepc > rvtest_code_end,  (outside data seg), abort
         bltu    t2, t3, cleanup_epilogs         // mepc < rvtest_code_begin (outside data seg), abort
 
 adj_\__MODE__\()epc:
-        sub     t4, t2, t3                      // Offset adjustment
+        sub     t3, t2, t3                      // Offset adjustment
 
 sv_\__MODE__\()epc:
-        SREG    t4, 2*REGWIDTH(t1)      // save 3rd sig value, (rel mepc) into trap sig area
+        SREG    t3, 2*REGWIDTH(t1)      // save 3rd sig value, (rel mepc) into trap sig area
 
 adj_\__MODE__\()epc_rtn:                // adj mepc so there is at least 4B of padding after op
         andi    t6, t2, ~WDBYTMSK       // adjust mepc to prev 4B alignment (if 2B aligned)
@@ -1123,39 +1174,51 @@ adj_\__MODE__\()epc_rtn:                // adj mepc so there is at least 4B of p
   /* error if exception address isn't inside code, data or signature segments   */
   /* Enter with rvtest_code_begin (which is start of actual test) in t3         */
   /* FUTURE FIXME: this may need to be updated to handle 48 or 64b opcodes      */
+  /* This uses offset sp in t4 from epc relocation                              */
   /******************************************************************************/
 
-        csrr    t6, CSR_XTVAL
+        csrr    t2, CSR_XTVAL
 
 chk_\__MODE__\()tval:
-        LI(     t4, SET_REL_TVAL_MSK)   // now check if code or data (or sig) region adjustment
-        srl     t4, t4, t5              // put mcause bit# into LSB
-        slli    t4, t4, XLEN-1          // put mcause bit# into MSB
-        bge     t4, x0, sv_\__MODE__\()tval     // if MSB=0, no adj, sv to ensure tval was cleared
+        andi    t5, t5, EXCPT_CAUSE_MSK // ensures shift amt will be within range
+        LI(     t3, SET_REL_TVAL_MSK)   // now check if code or data (or sig) region adjustment
+        srl     t3, t3, t5              // put mcause bit# into LSB
+        slli    t3, t3, XLEN-1          // put mcause bit# into MSB
+        bge     t3, x0, sv_\__MODE__\()tval     // if MSB=0, no adj, sv to ensure tval was cleared
+
+vmem_adj_\__MODE__\()tval:         /* t4 still points to sv area of trapping mode */
+        LREG    t3, vmem_bgn_off(t4)            // fetch sig_begin addr
+        LREG    t6, vmem_seg_siz(t4)
+        add     t6, t6, t3                      // construct vmem seg end
+        bgeu    t2, t6,  sig_adj_\__MODE__\()tval// tval > rvtest_sig_end, chk code seg
+        bgeu    t2, t3,      adj_\__MODE__\()tval// tval >=rvtest_sig_begin, adj & save
 
 sig_adj_\__MODE__\()tval:
-        LREG    t3, code_bgn_off(sp)            // fetch sig_begin addr
-        LREG    t6, code_end_off(sp)            // fetch sig_end   addr
+        LREG    t3, sig_bgn_off(t4)            // fetch sig_begin addr
+        LREG    t6, sig_seg_siz(t4)
+        add     t6, t6, t3                      // construct sig seg end
         bgeu    t2, t6, code_adj_\__MODE__\()tval// tval > rvtest_sig_end, chk code seg
         bgeu    t2, t3,      adj_\__MODE__\()tval// tval >=rvtest_sig_begin, adj & save
 
 code_adj_\__MODE__\()tval:
-        LREG    t3, code_bgn_off(sp)            // fetch code_begin addr
-        LREG    t6, code_end_off(sp)            // fetch code_end   addr
+        LREG    t3, code_bgn_off(t4)            // fetch code_begin addr
+        LREG    t6, code_seg_siz(t4)
+        add     t6, t6, t3                      // construct code seg end
         bgeu    t2, t6, data_adj_\__MODE__\()tval// tval > rvtest_code_end, chk data seg
         bgeu    t2, t3,      adj_\__MODE__\()tval// tval >=rvtest_code_begin, adj & save
 
 data_adj_\__MODE__\()tval:
-        LREG    t3, data_bgn_off(sp)            // fetch data_begin addr
-        LREG    t6, data_bgn_off(sp)            // fetch data_end   addr
+        LREG    t3, data_bgn_off(t4)            // fetch data_begin addr
+        LREG    t6, data_seg_siz(t4)
+        add     t6, t6, t3                      // construct data seg end
         bgeu    t2, t6, cleanup_epilogs         // tval > rvtest_data_end,  (outside data seg), abort
         bltu    t2, t3, cleanup_epilogs         // tval < rvtest_data_begin (outside data seg), abort
 
 adj_\__MODE__\()tval:
-        sub     t6, t6, t3              // perform mtval adjust by either code, data, or sig position in t3
+        sub     t3, t2, t3              // perform mtval adjust by either code, data, or sig position in t3
 
 sv_\__MODE__\()tval:
-        SREG    t6, 3*REGWIDTH(t1)      // save 4th sig value, (rel tval)
+        SREG    t3, 3*REGWIDTH(t1)      // save 4th sig value, (rel tval)
 
 skp_\__MODE__\()tval:
 
@@ -1168,20 +1231,14 @@ skp_\__MODE__\()tval:
     .endif
   .endif
 
-chk_\__MODE__\()trapsig_overrun:
+chk_\__MODE__\()trapsig_overrun:        // sv_area_off is defined above at Xtrap_sig_sv:
  //This is the same code used at xtrap_sig_sv to get the shared copy of trap signature pointer
-.if     (\__MODE__\() == V)                     // get trapsig_ptr & init val up 2 save areas (M<-S<-V)
-        LREG    t4, -2*sv_area_sz+trapsig_ptr_off(sp)
-        LREG    t1, -2*sv_area_sz+sig_end_off(sp)
-.elseif (\__MODE__\() == S)                     // get trapsig_ptr & init val  up 1 save areas (M<-S)
-        LREG    t4, -1*sv_area_sz+trapsig_ptr_off(sp)
-        LREG    t1, -1*sv_area_sz+sig_end_off(sp)
-.else                                           // get trapsig ptr & init val for this Mmode,  (M)
-        LREG    t4, -0*sv_area_sz+trapsig_ptr_off(sp)
-        LREG    t1, -0*sv_area_sz+sig_end_off(sp)
-.endif
+        LREG    t4, sv_area_off+trapsig_ptr_off(sp)
+        LREG    t2, sv_area_off+sig_bgn_off(sp)
+        LREG    t1, sv_area_off+sig_seg_siz(sp)
 
 // now see if the pointer has overrun sig_end
+        add     t1, t1, t2                      // construct segment end address
         bgtu    t4, t1, cleanup_epilogs         // abort test if pre-incremented value overruns
 
   /**** vector to exception special handling routines ****/
@@ -1227,27 +1284,20 @@ sv_\__MODE__\()ip:                      // note: clear has no effect on MxIP
 /**************************************************************/
 
 spcl_\__MODE__\()handler:               // case table branch to special handler code, depending on mcause
-        auipc   t3, 0                   // shortcut for LA(clrint_\__MODE__\()tbl)
-//#ifdef RVTEST_DISPATCH_CHK       
-        addi    t3, t3, 13*4            //shortcut to avoid LA clrint_xtbl
-//#else
-//       addi    t3, t3,  9*4            //shortcut to avoid LA clrint_xtbl
-//#endif
+        auipc   t3, 0                   // shortcut for LA(clrint_\__MODE__\()tbl) (might be 4 too large)
+        addi    t3, t3, 15*4            //shortcut to avoid LA clrint_xtbl - this is might be 4 too large
         add     t3, t3, t2              // offset into the correct int/excpt dispatch table
         slli    t2, t5, 3               // index into 8b aligned dispatch entry and jump through it
         add     t3, t3, t2
+	andi	t3, t3, -8		// make sure this is dblwd aligned, correct if it is 4 too large
         LREG    t3, 0(t3)
 spcl_\__MODE__\()dispatch_hndling:        
         beqz    t3, abort_tests         // if address is 0, this is an error, exit test
         slli    t2, t3, XLEN-1          // look at LSB and dispatch if even
-//#ifdef RVTEST_DISPATCH_CHK
         bge     t2, x0, spcl_\__MODE__\()dispatch
-        srl     t3, t3,1                //odd entry>0, remove LSB, normalizing to cause range
+        srli    t3, t3,1                //odd entry>0, remove LSB, normalizing to cause range
         beq     t5, t3, resto_\__MODE__\()rtn // case range matches, not an error, just noop
         j       abort_tests             //FIXME: this needs to report an error somehow
-//#else
-//        blt     t2, x0, resto_\__MODE__\()rtn // spcl noop encoding with intID, just noop
-//#endif
         
 spcl_\__MODE__\()dispatch:
         jr      t3                      // not a default, jump to handler
@@ -1255,7 +1305,7 @@ spcl_\__MODE__\()dispatch:
 /**** this is the table of interrupt clearing routine pointers, which could include special handlers ****/
 /**** They default to RVMODEL macros above, which are model supplied, then jump to rtn code          ****/
 /**** Note that the external interrupt routines are expected to return with an interrupt ID in t3    ****/
-
+	.align 3			//make sure this is a dblwd boundary
 clrint_\__MODE__\()tbl:                 //this code should only touch t2..t6
 #ifdef rvtest_vtrap_routine  //  M/S/V/U
         .dword  0                       // int cause  0 is reserved, error
@@ -1379,31 +1429,29 @@ excpt_\__MODE__\()hndlr_tbl:            // handler code should only touch t2..t6
 
 /***************  Spcl handler for returning from GOTO_MMODE.            ********/
 /***************  Only gets executed if GOTO_MMODE not called from Mmode ********/
-/***************  Executed in M-mode. Enter w/ t1=ptr to Mregsave in t1  ********/
+/***************  Executed in M-mode. Enter w/ t1=ptr to Mregsave, t2=0  ********/
+/***************  NOTE: Ecall must NOT delegate when t2=0 or this fails  ********/
 
-rtn2mmode:                         //
-        addi t4,t5, -11
-        beqz t4, rtn_fm_mmode
+rtn2mmode:
+        addi    t4,t5, -CAUSE_MACHINE_ECALL
+        beqz    t4, rtn_fm_mmode        /* shortcut if called from Mmode        */
 #if (XLEN==32)
         csrr    t2, CSR_MSTATUSH        /* find out originating mode if  RV32   */
 #else
         csrr    t2, CSR_MSTATUS         /* find out originating mode if RV64/128*/
 #endif
-        srli    t2, t2, MPV_LSB+XLEN-WDSZ /* but it into LSB ****FIXME if RV128 */ 
-        andi    t2, t2, 1               /* 0=not virtualized, 1=virtualized     */
+        slli    t2, t2, WDSZ-MPV_LSB-1  /* but V into MSB  ****FIXME if RV128   */ 
         LREG    t6, code_bgn_off+1*sv_area_sz(sp)    /* get U/S mode code begin */
-        beqz    t2, from_u_s
-from_v:	
-        LREG    t6, code_bgn_off+2*sv_area_sz(sp)    /* get V   mode code begin */
+        bgez    t2, from_u_s            /* V==0, not virtualized, *1 offset     */
+from_v:
+        LREG    t6, code_bgn_off+2*sv_area_sz(sp)/* get VU/VS   mode code begin */
 from_u_s:                               /* get u/s modes CODE_BEGIN             */
-        csrr    t2, CSR_MEPC            /* get return address in orig mode's VM */
         LREG    t4, code_bgn_off+0*sv_area_sz(sp)    /* get M   mode code begin */
         sub     t4, t4, t6              /* calc relocation amount               */
+rtn_fm_mmode:
+        csrr    t2, CSR_MEPC            /* get return address in orig mode's VM */
         add     t2, t2, t4              /* calc rtn_addr in Mmode VM            */
         jr      4(t2)                   /* return after GOTO_MMODE in M-mode    */
-rtn_fm_mmode:
-        csrr    t2, CSR_MEPC 
-        jr      4(t2)
 .endif
 .option pop
 .endm                                   // end of HANDLER
@@ -1496,49 +1544,46 @@ rvtest_\__MODE__\()end:
 .global \__MODE__\()tramptbl_sv
 
 //****ASSERT: this should be a 64B boundary******//
-\__MODE__\()tramptbl_sv:        // save area of existing trampoline table
+\__MODE__\()tramptbl_sv:        // save area of existing trampoline table,     // also stored in XSCRATCH!!!
 .rept (tramp_sz>>2)             // size in words (technically, legnth of j op)
         j       .+0             // prototype jump instruction, offset to be filled in
 .endr
-#define ptrsv_sz        (17*8)
-\__MODE__\()code_bgn_ptr:
-        .dword rvtest_code_begin// pointer to code bgn area using this mode's mapping trampsvend+0
-\__MODE__\()code_end_ptr:
-        .dword rvtest_code_end  // pointer to code end area using this mode's mapping trampsvend+1
-\__MODE__\()data_bgn_ptr:       // also stored in XSCRATCH!!!
-        .dword rvtest_data_begin// pointer to data bgn area using this mode's mapping trampsvend+2
-\__MODE__\()data_end_ptr:
-        .dword rvtest_data_end  // pointer to data end area using this mode's mapping trampsvend+3
-\__MODE__\()sig_bgn_ptr:
-        .dword rvtest_sig_begin // pointer to sig  bgn area using this mode's mapping trampsvend+4
-\__MODE__\()sig_end_ptr:
-        .dword rvtest_sig_end   // pointer to sig  end area using this mode's mapping trampsvend+5
-\__MODE__\()trap_sig:
-        .dword  mtrap_sigptr    // pointer to next trapsig  (only Mmode version used) trampsvend+6
-\__MODE__\()trap_sig_init:
-        .dword  mtrap_sigptr    // pointer to init trapsig using this mode's mapping  trampsvend+7
 
-\__MODE__\()satp_sv:
-        .dword 0                // save area for incoming xsatp            trampsvend+8
-\__MODE__\()mode_rtn:
-        .dword 0                // if !=0, then in special goto_mmode mode trampsvend+9
-\__MODE__\()trampend_sv:
-        .dword  0               // save location of end of trampoline      trampsvend+10
-\__MODE__\()edeleg_sv:
-        .dword  0               // save location for edeleg CSR            trampsvend+11
-\__MODE__\()tvec_new:
-        .dword  0               // points to in-use tvec, actual tramp table used  trampsvend+12
-\__MODE__\()tvec_save:
-        .dword  0               // save area for incoming mtvec            trampsvend+13
-\__MODE__\()scratch_save:
-        .dword  0               // save area for incoming mscratch          trampsvend+14
+\__MODE__\()code_bgn_ptr:
+        .dword rvtest_code_begin// pointer to code bgn area using this mode's mapping trampsvend+0*8
+\__MODE__\()code_end_ptr:
+        .dword rvtest_code_end-rvtest_code_begin         // code seg size in any mode trampsvend+1*8
+\__MODE__\()data_bgn_ptr:
+        .dword rvtest_data_begin// pointer to data bgn area using this mode's mapping trampsvend+2*8
+\__MODE__\()data_end_ptr:
+        .dword rvtest_data_end-rvtest_data_begin         // code seg size in any mode trampsvend+3*8
+\__MODE__\()sig_bgn_ptr:
+        .dword rvtest_sig_begin // pointer to sig  bgn area using this mode's mapping trampsvend+4*8
+\__MODE__\()sig_end_ptr:
+        .dword rvtest_sig_end-rvtest_sig_begin           // code seg size in any mode trampsvend+5*8
 \__MODE__\()vmem_bgn_ptr:
-        .dword rvtest_data_begin// pointer to data bgn area using this mode's mapping trampsvend+15
+        .dword rvtest_data_begin// pointer to vmem bgn area using this mode's mapping trampsvend+6*8
 \__MODE__\()vmem_end_ptr:
-        .dword rvtest_data_end  // pointer to data end area using this mode's mapping trampsvend+16
+        .dword rvtest_data_end-rvtest_data_begin         // vmem seg size in any mode trampsvend+7*8
+
+\__MODE__\()trap_sig:
+        .dword  mtrap_sigptr    // pointer to next trapsig  (only Mmode version used) trampsvend+8*8
+\__MODE__\()satp_sv:
+        .dword 0                // save area for incoming xsatp                       trampsvend+9*8
+\__MODE__\()trampend_sv:
+        .dword  0               // save location of end of trampoline                 trampsvend+10*8
+\__MODE__\()edeleg_sv:
+        .dword  0               // save location for edeleg CSR                       trampsvend+11*8
+\__MODE__\()tvec_new:
+        .dword  0               // points to in-use tvec, actual tramp table used     trampsvend+12*8
+\__MODE__\()tvec_save:
+        .dword  0               // save area for incoming mtvec                       trampsvend+13*8
+\__MODE__\()scratch_save:
+        .dword  0               // save area for incoming mscratch                    trampsvend+14*8
 
 \__MODE__\()trapreg_sv:         //****GLOBAL:*****
-        .fill   8, REGWIDTH, 0xdeadbeef     // handler regsave area, t1..t6,sp +1 extra, keep dbl alignment trampsvend+15
+        .fill   8, REGWIDTH, 0xdeadbeef   // handler regsave area, t1..t6,sp +1 extra,trampsvend+15*8; keep dbl alignment
+
 \__MODE__\()sv_area_end:        // used to calc size, which is used to avoid CSR read trampsvend+15+8
 
 .option pop
@@ -1609,12 +1654,14 @@ cleanup_epilogs:                // jump here to quit, will restore state for eac
    RVTEST_TRAP_EPILOG M         // actual m-mode prolog/epilog/handler code
 #endif
 
-/************* test done, epolog has restored everying, jump to halt ****************/
+/************* test done, epilog has restored everying, jump to halt ****************/
   j     exit_cleanup            //skip around handlers, go to RVMODEL_HALT
 
 abort_tests:
-  LREG    t4, sig_end_off(sp)   // calculate Mmode sig_end addr
-  LI(     t1, 0xBAD0DAD0)       // early abort signature value
+  LREG    t4, sig_bgn_off(sp)   // calculate Mmode sig_end addr in handler's mode
+  LREG    t1, sig_seg_siz(sp)
+  add     t1, t1, t4            // construct sig seg end
+  LI(     t1, 0xBAD0DAD0)       // early abort signature value at sig_end, independent of mtrap_sigptr
   SREG    t1, -4(t4)            // save into last signature canary
   j     exit_cleanup            // skip around handlers, go to RVMODEL_HALT
 /********************** trap handlers inserted here ***********************************/
