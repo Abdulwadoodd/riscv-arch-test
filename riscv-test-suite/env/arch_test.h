@@ -162,6 +162,7 @@
 
 //this is a valid global pte entry with all permissions. IF at the root entry, it forms an identity map.
 #define RVTEST_PTE_IDENT_MAP  .fill   4096/REGWIDTH, REGWIDTH, (PTE_G | PTE_U | PTE_X | PTE_W | PTE_R | PTE_V)
+#define RVTEST_PTE_NOACC_MAP  .fill   4096/REGWIDTH, REGWIDTH, (PTE_G | PTE_U )
 
 //_ADDR_SZ_ is a global variable extracted from YAML; set a default if it isn't defined
 // This should be the MAX(phy_addr_size, VADDR_SZ) from YAML, where VADDR_SZ is derived from SATP.mode at reset
@@ -627,18 +628,18 @@ RVMODEL_DATA_END        /* model specific stuff */
 
 
 /***********************************************************************************/
-/**** At end of test, this code is entered. It sets a mode variable to divert   ****/
-/**** the handler to a special rtn_fm_mmode handler, then executs an op that's  ****/
-/**** illegal in any non-Mmode (else it just falls through). The presence of    ****/
-/**** The special handler relocates EPC to the mmode PA, and returns to the     ****/
-/**** fall through location, but now in Mmode. It then clears the mode variavle ****/
-/**** **NOTE**:  this assumes nothing about the current priv mode but MUST      ****/
-/**** assume that xedeleg[illegal_op]==0 to prevent infinite delegation loops.  ****/
-/**** This overwrites t1..t6                                                    ****/
-/**** NOTE:  tests that set Medeleg[illegal_op] must replace  GOTO_M_OP with    ****/
-/**** an op that causes a different exception cause that isn't delegated.       ****/
-/**** NOTE: this may overwrite non-Mmode trap status CSRs                       ****/
-/**** FIXME - check that SATP and VSATP point to the identity map page table    ****/
+/**** At end of test, this code is entered. It sets a register x2 to 0 and by   ****/
+/**** default executes an ecall.  The handler checks if the cause of the trap   ****/	
+/**** was ecall, w/ x2=0, and divert a special rtn_fm_mmode handler. That code  ****/
+/**** determines the caller's mode, uses it to select it's CODE_BEGIN, and uses ****/
+/**** to calculate it offset from Mmode's CODE_BEGIN, adjusts MEPC by that amt  ****/	
+/**** to convert it to an Mmode address, restores saved regs, and branches to   ****/
+/**** the relocated addr+4, immediately following the ECALL, but now in Mmode   ****/
+/**** **NOTE**: this destroys t2 and clears x2 (AKA sp)                                               ****/
+/**** **NOTE**: this works from any mode but MUST not be used if                ****/
+/****       medeleg[<GOTO_M_OP_cause>]==1 to prevent infinite delegation loops.   ****/
+/**** **NOTE: tests that set medeleg[GOTO_M_OP_cause] must replace  GOTO_M_OP   ****/
+/****  with an op that causes a different exception cause that isn't delegated. ****/
 /***********************************************************************************/
 
 .macro  RVTEST_GOTO_MMODE
@@ -648,7 +649,7 @@ RVMODEL_DATA_END        /* model specific stuff */
     li   x2, 0                  /* Ecall w/x2=0 is handled specially to rtn here */
 // Note that if illegal op trap is delegated , this may infinite loop
 // The solution is either for test to disable delegation, or to
-// redefine the GOTO_M_OP to be an op that will trap vertically
+// redefine the GOTO_M_OP to be an op that will trap  to mmode
 
     GOTO_M_OP                   /* ECALL: traps always, but returns immediately to */
                                 /* the next op if x2=0, else handles trap normally */
@@ -1004,8 +1005,8 @@ spcl_\__MODE__\()2mmode_test:
         addi    t4, t5, -8                      // is cause 8..11? Mmode should avoid ECALL 0
         andi    t4, t4, -4                      // NOTE: cause 10 is RSVD.  Sail will diverge, but buggy anyway  
         bnez    t4, \__MODE__\()trapsig_ptr_upd // no, not in special mode, just continue
-        LREG    t2, trap_sv_off+7*REGWIDTH(sp)  // get test x2 (which is sp, which has been save in the trap_sv area
-        beqz    t2, rtn2mmode                   // spcl code 0 in t2 == spcl ECALL goto_mmode, just rtn after ECALL
+	LREG    t2, trap_sv_off+7*REGWIDTH(sp)  // get test x2 (which is sp, which has been saved in the trap_sv area
+        beqz    t2, rtn2mmode                   // spcl code 0 in t2 means spcl ECALL goto_mmode, just rtn after ECALL
 //------pre-update trap_sig pointer so handlers can themselves trap-----
 \__MODE__\()trapsig_ptr_upd:                    // calculate entry size based on int vs. excpt, int type, and h mode
         li      t2, 4*REGWIDTH                  // standard entry length
@@ -1134,8 +1135,10 @@ common_\__MODE__\()excpt_handler:
   .endif
 .endif  
   //********************************************************************************
+
 vmem_adj_\__MODE__\()epc:          /* t4 now points to sv area of trapping mode */
         csrr    t2, CSR_XEPC
+
         LREG    t3, vmem_bgn_off(t4)            // see if epc is in the vmem area
         LREG    t6, vmem_seg_siz(t4)
         add     t6, t6, t3                      // construct vmem seg end
@@ -1452,8 +1455,9 @@ from_u_s:                               /* get u/s modes CODE_BEGIN             
 rtn_fm_mmode:
         csrr    t2, CSR_MEPC            /* get return address in orig mode's VM */
         add     t2, t2, t4              /* calc rtn_addr in Mmode VM            */
+
         LREG    t1, trap_sv_off+1*REGWIDTH(sp)
-        // LREG    t2, trap_sv_off+2*REGWIDTH(sp) <- this hold return address, don't restore
+ //     LREG    t2, trap_sv_off+2*REGWIDTH(sp) /*this holds the return address  */
         LREG    t3, trap_sv_off+3*REGWIDTH(sp)
         LREG    t4, trap_sv_off+4*REGWIDTH(sp)
         LREG    t5, trap_sv_off+5*REGWIDTH(sp)
