@@ -45,13 +45,32 @@
 //     STORE_PTE(a0,a1,a2,sw) /* sw a1, < a2 > (a0)  */       ;\
 
 
-// sv32_dev(a0, a1, t0, t1, t2, 0x80000000, 1)
-#define PTE_SETUP_SV32(_PAR, _PR, _TR0, _TR1, _TR2, VA, level)        ;\
-    LA(_TR1, rvtest_Sroot_pg_tbl)  /* Base address of root page table*/   ;\
-    .set va_offset, (VA>>22)<<2                                 ;\
-    LI(_TR0, va_offset)                                         ;\
+/* This function set up the Page table entry for Sv32 Translation scheme
+    Arguments:
+    _PAR: Register containing Physical Address
+    _PR: Register containing Permissions for Leaf PTE. 
+        (Note: No-leaf PTE (if-any) has only valid permssion (pte.v) set)
+    _TR0, _TR1, _TR2: Temporary registers used and modified by function
+    VA: Virtual address 
+    level: Level at which PTE would be setup
+        0: Two level translation
+        1: Superpage
+*/
+#define VPN32_MASK 0x3FF
+
+#define PTE_SETUP_SV32(_PAR, _PR, _TR0, _TR1, _TR2, VA, level)              ;\
+    LA(_TR1, rvtest_Sroot_pg_tbl)   /* Base address of root page table*/    ;\
+                                    /* Must be aligned at 4KiB boundary*/   ;\
+    .set vpn1, ((VA>>22)&0x3FF)<<2     /* Get VPN[1] as offet to root Page for level1 PTE*/;\
+    LI(_TR0, vpn1)                                         ;\
     add _TR1, _TR1, _TR0                                        ;\
-    .if (level==1)                                              ;\
+    .if(level==1)                                               ;\
+        srli _PAR, _PAR, 22                                     ;\
+        slli _PAR, _PAR, 20                                     ;\
+        or _PAR, _PAR, _PR                                      ;\
+        SREG _PAR, 0(_TR1)                                      ;\
+    .endif                                                      ;\
+    .if (level==0)                                              ;\
         srli _PAR, _PAR, 12                                     ;\
         slli _PAR, _PAR, 10                                     ;\
         or _PAR, _PAR, _PR                                      ;\
@@ -59,17 +78,50 @@
         srli _TR0, _TR2, 2                                      ;\
         ori _TR0, _TR0, PTE_V                                   ;\
         SREG _TR0, 0(_TR1)                                      ;\
-        LI(_TR0, VA)                                            ;\
-        slli _TR0, _TR0, 10                                     ;\
-        srli _TR0, _TR0, 22                                     ;\
-        slli _TR0, _TR0, 2                                      ;\
+        .set vpn0, ((VA>>12)&0x3FF)<<2                          ;\
+        LI(_TR0, vpn0)                                          ;\
         add _TR2, _TR2, _TR0                                    ;\
         SREG _PAR, 0(_TR2)                                      ;\
-    .else ;\
-        srli _PAR, _PAR, 22                                     ;\
-        slli _PAR, _PAR, 20                                     ;\
-        or _PAR, _PAR, _PR                                      ;\
-        SREG _PAR, 0(_TR1)                                      ;\
+    .endif                                                      ;\
+
+#define PTE_SETUP_SV39(_PAR, _PR, VA, level) ;\
+    LA(t1, rvtest_Sroot_pg_tbl)  /* Base address of root page table*/   ;\
+                                 /* Must be aligned at 4KiB boundary*/   ;\
+    .set vpn2, (VA>>30)<<3                         ;\
+    LI(t0, vpn2)                                   ;\
+    add t1, t1, t0     /* Address to PTE at level0 */   ;\
+    .if(level==2)                                       ;\
+        srli _PAR, _PAR, 30                             ;\
+        slli _PAR, _PAR, 28                             ;\
+        or _PAR, _PAR, _PR                              ;\
+        SREG _PAR, 0(t1)    /*leaf PTE at level2*/      ;\
+    .else                                               ;\
+        LA(t2, rvtest_lvl1_tbl)                         ;\
+        srli t0, t2, 2                                  ;\
+        ori t0, t0, PTE_V                               ;\
+        SREG t0, 0(t1)     /*level2 points to level1 */ ;\
+        .set vpn1, ((VA>>21)&0x1FF)<<3                ;\
+        LI(t1, vpn1)                                    ;\
+        add t1, t1, t2                                  ;\
+        .if(level==1)                                   ;\
+            srli _PAR, _PAR, 21                         ;\
+            slli _PAR, _PAR, 19                         ;\
+            or _PAR, _PAR, _PR                          ;\
+            SREG _PAR, 0 (t1) /*leaf PTE at level1*/    ;\
+        .endif                                          ;\
+        .if(level==0)                                   ;\
+            LA(t2, rvtest_lvl2_tbl)                     ;\
+            srli t0,t2,2                                ;\
+            ori t0,t0,PTE_V                             ;\
+            SREG t0, 0(t1)   /*level1 points to level0*/;\
+            .set vpn0, ((VA>>12)&0x1FF)<<3            ;\
+            LI(t1, vpn0)                                ;\
+            add t1,t1,t2                                ;\
+            srli _PAR, _PAR, 12                         ;\
+            slli _PAR, _PAR, 10                         ;\
+            or _PAR, _PAR, _PR                          ;\
+            SREG _PAR, 0 (t1) /*leaf PTE at level0*/    ;\
+        .endif                                          ;\
     .endif
 
 #define SATP_SETUP ;\

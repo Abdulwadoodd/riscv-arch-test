@@ -645,13 +645,13 @@ RVMODEL_DATA_END        /* model specific stuff */
 .option push
 .option norvc
 #ifdef  rvtest_mtrap_routine    /**** this can be empty if no Umode ****/
-    li   x2, 0                  /* Ecall w/t2=0 is handled specially to rtn here */
+    li   x2, 0                  /* Ecall w/x2=0 is handled specially to rtn here */
 // Note that if illegal op trap is delegated , this may infinite loop
 // The solution is either for test to disable delegation, or to
 // redefine the GOTO_M_OP to be an op that will trap vertically
 
     GOTO_M_OP                   /* ECALL: traps always, but returns immediately to */
-                                /* the next op if t2=0, else handles trap normally */
+                                /* the next op if x2=0, else handles trap normally */
 
  #endif
 .option pop
@@ -1004,7 +1004,8 @@ spcl_\__MODE__\()2mmode_test:
         addi    t4, t5, -8                      // is cause 8..11? Mmode should avoid ECALL 0
         andi    t4, t4, -4                      // NOTE: cause 10 is RSVD.  Sail will diverge, but buggy anyway  
         bnez    t4, \__MODE__\()trapsig_ptr_upd // no, not in special mode, just continue
-        beqz    s2,  rtn2mmode                  // spcl code 0 in t2 == spcl ECALL goto_mmode, just rtn after ECALL
+        LREG    t2, trap_sv_off+7*REGWIDTH(sp)  // get test x2 (which is sp, which has been save in the trap_sv area
+        beqz    t2, rtn2mmode                   // spcl code 0 in t2 == spcl ECALL goto_mmode, just rtn after ECALL
 //------pre-update trap_sig pointer so handlers can themselves trap-----
 \__MODE__\()trapsig_ptr_upd:                    // calculate entry size based on int vs. excpt, int type, and h mode
         li      t2, 4*REGWIDTH                  // standard entry length
@@ -1451,6 +1452,13 @@ from_u_s:                               /* get u/s modes CODE_BEGIN             
 rtn_fm_mmode:
         csrr    t2, CSR_MEPC            /* get return address in orig mode's VM */
         add     t2, t2, t4              /* calc rtn_addr in Mmode VM            */
+        LREG    t1, trap_sv_off+1*REGWIDTH(sp)
+        // LREG    t2, trap_sv_off+2*REGWIDTH(sp) <- this hold return address, don't restore
+        LREG    t3, trap_sv_off+3*REGWIDTH(sp)
+        LREG    t4, trap_sv_off+4*REGWIDTH(sp)
+        LREG    t5, trap_sv_off+5*REGWIDTH(sp)
+        LREG    t6, trap_sv_off+6*REGWIDTH(sp)
+        LREG    sp, trap_sv_off+7*REGWIDTH(sp)      // restore temporaries
         jr      4(t2)                   /* return after GOTO_MMODE in M-mode    */
 .endif
 .option pop

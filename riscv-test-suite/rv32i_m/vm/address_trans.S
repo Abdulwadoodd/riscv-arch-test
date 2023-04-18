@@ -40,37 +40,43 @@ main:
 	// write satp with all zeros (bare mode)
 	csrw satp, x0
 
-	.set va, 0x90000000
+	.set va, 0x91240000
 	.set pa, 0x80000000 
 	li a0,pa 
     li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
    	// PTE setup for Instruction memory 0x90000000 -> 0x80000000
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 1)
+	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 0)
 
     la a0, my_test_data      		   // physical address
-    li a1, (PTE_V | PTE_A | PTE_X)    // permissions
+    li a1, (PTE_V | PTE_A | PTE_R)    // permissions
 	// PTE setup for Data region 	0x710000000
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x71000000, 0)
+	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x71000000, 1)
 
 	SATP_SETUP
 
 	/* Save Virtual addresses in of Code and Data 
 	 in their respective S-mode save area */
-	la t1,my_test_data
-	li t4, 0x71000000
-	sub t4, t4, t1
-	LI(t0, va-pa)
+	
+	/****** code ******/
+	LI (t0, va)
+	LI (t1, pa)
+	sub t0, t0, t1 // Note: VA > PA 
 	csrr sp, mscratch
 	add t1,sp,t0
 	csrw sscratch, t1
-	// data
-	LREG t1, data_bgn_off+0*sv_area_sz(sp)
-	add  t2, t1,t4
-	SREG t2, data_bgn_off+1*sv_area_sz(sp)
-	//code 
+	
 	LREG t1, code_bgn_off+0*sv_area_sz(sp)
 	add t2, t1,t0
 	SREG t2, code_bgn_off+1*sv_area_sz(sp)
+
+	/******* data *******/
+	la t1,my_test_data
+	li t4, 0x71000000
+	sub t4, t4, t1
+	// update save area
+	LREG t1, data_bgn_off+0*sv_area_sz(sp)
+	add  t2, t1,t4
+	SREG t2, data_bgn_off+1*sv_area_sz(sp)
 	//signature
 	//LREG t1, sig_bgn_off+0*sv_area_sz(sp)
 	//add t2, t1, t0
@@ -91,18 +97,41 @@ main:
 	RVTEST_GOTO_LOWER_MODE	Smode		   // Switching to S mode
 
 vm_en:
-	li t0, 0x7100011C
-    li t1, 0xFDABC 
+	li t1, 0x12
+	li t2, 0x13
+	li t3, 0x14
+	li t4, 0x15
+	li t5, 0x16
+	li t6, 0x17
+	li sp, 0x18
+	LA(t1, my_test_data)
+	slli t1,t1,16
+	srli t1,t1,16
+	li t0, 0x71000000
+	or t0,t0,t1 
     lw t1, 0(t0) // must be trapped: Dump 4 words in signatures
 	nop
 	// Trap must return on Virtual addr of following instructions
-	li t1, 0xFFFF7890
-	li t2, 0xFFFF0001
-	li t1, 0xFFFF0002
+	add t0, t0, x0
+	add t1, t1, x0
+	add t2, t2, x0
+	add t3, t3, x0
+	add t4, t4, x0
+	add t5, t5, x0
+	add t6, t6, x0
+	add sp, sp, x0
 
 	RVTEST_GOTO_MMODE		// Switching back to M mode
 
 mmode:
+	add t0, t0, x0
+	add t1, t1, x0
+	add t2, t2, x0
+	add t3, t3, x0
+	add t4, t4, x0
+	add t5, t5, x0
+	add t6, t6, x0
+	add sp, sp, x0
 	li t2, 0xabab			// Verification if handler is returning and SIGUPD is working afer the handler
 	csrw pmpaddr1, t2		// If in M-mode, this instruction will work otherwise not.
 	csrr a4, pmpaddr1
