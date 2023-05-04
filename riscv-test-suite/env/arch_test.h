@@ -218,9 +218,9 @@
 .set MMODE_SIG,3   /* FIXME why don't the #defines work if they're evaluated first?? */
 .set VMODE_SIG,2
 .set SMODE_SIG,1
-  //#define MMODE_SIG 3
-  //#define VMODE_SIG 2
-  //#define SMODE_SIG 1
+#define MMODE_PTE 0
+#define SMODE_PTE 1
+#define VMODE_PTE 2
         /* these macros need to be defined because mode is uppercase in mode specific macros */
         /* note that vs mode uses smode return */
 

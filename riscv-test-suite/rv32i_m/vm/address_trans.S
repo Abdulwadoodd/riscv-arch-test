@@ -42,25 +42,37 @@ main:
 
 	.set va, 0x91240000
 	.set pa, 0x80000000 
-	li a0,pa 
-    li a1,(PTE_V | PTE_X | PTE_A | PTE_R| PTE_W | PTE_D)   // permissions for PTE to for address instruction of instruction memory
-   	// PTE setup for Instruction memory 0x90000000 -> 0x80000000
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 0)
+
+	// PTE setup for Instruction memory 0x91240000 -> 0x80000000
+
+	la a0, rvtest_slvl1_pg_tbl
+    li a1,PTE_V   // permissions for PTE to for address instruction of instruction memory
+	PTE_SETUP_RV32(a0, a1, t0, t1, va, 1)
+	
+	li a0, pa
+	li a1, (PTE_V | PTE_A | PTE_R | PTE_X | PTE_W | PTE_X)
+	PTE_SETUP_RV32(a0, a1, t0, t1, va, 0)
+	//PTE_SETUP_SV32(a0, a1, t0, t1, t2, va, 0)
+
+
+	la a0, rvtest_slvl1_pg_tbl
+    li a1,PTE_V   // permissions for PTE to for address instruction of instruction memory
+	PTE_SETUP_RV32(a0, a1, t0, t1, 0x78000000, 1)
 
     la a0, my_test_data      		   // physical address
     li a1, (PTE_V | PTE_A | PTE_R)    // permissions
-	// PTE setup for Data region 	0x710000000
-	PTE_SETUP_SV32(a0, a1, t0, t1, t2, 0x71000000, 1)
+	// PTE setup for Data region 	0x780000000
+	PTE_SETUP_RV32(a0, a1, t0, t1 ,0x78000000, 0)
 
 	SATP_SETUP
 
 	/* Save Virtual addresses in of Code and Data 
 	 in their respective S-mode save area */
-	
+
 	/****** code ******/
 	LI (t0, va)
 	LI (t1, pa)
-	sub t0, t0, t1 // Note: VA > PA 
+	sub t0, t0, t1 // (VA-PA) Note: VA > PA 
 	csrr sp, mscratch
 	add t1,sp,t0
 	csrw sscratch, t1
@@ -71,7 +83,7 @@ main:
 
 	/******* data *******/
 	la t1,my_test_data
-	li t4, 0x71000000
+	li t4, 0x78000000
 	sub t4, t4, t1
 	// update save area
 	LREG t1, data_bgn_off+0*sv_area_sz(sp)
@@ -93,45 +105,28 @@ main:
 	// set mstatus.SUM 
 	# li t1, MSTATUS_SUM
 	# csrs mstatus, t1
-	
+	sfence.vma
 	RVTEST_GOTO_LOWER_MODE	Smode		   // Switching to S mode
 
 vm_en:
-	li t1, 0x12
-	li t2, 0x13
-	li t3, 0x14
-	li t4, 0x15
-	li t5, 0x16
-	li t6, 0x17
-	li sp, 0x18
 	LA(t1, my_test_data)
 	slli t1,t1,16
 	srli t1,t1,16
-	li t0, 0x71000000
-	or t0,t0,t1 
-    lw t1, 0(t0) // must be trapped: Dump 4 words in signatures
+	li t0, 0x78000000
+	//or t0,t0,t1 
+    lw t1, 0(t0) 
+	nop
+	li a0, (PTE_R | PTE_A)
+	PTE_PERMUPD_RV32(a0, t0, t1, 0x78000000, 0) 
+	li t0, 0x78000000
+	//or t0,t0,t1 
+    lw t1, 0(t0)
 	nop
 	// Trap must return on Virtual addr of following instructions
-	add t0, t0, x0
-	add t1, t1, x0
-	add t2, t2, x0
-	add t3, t3, x0
-	add t4, t4, x0
-	add t5, t5, x0
-	add t6, t6, x0
-	add sp, sp, x0
-
+	li t1, 0x789
 	RVTEST_GOTO_MMODE		// Switching back to M mode
 
 mmode:
-	add t0, t0, x0
-	add t1, t1, x0
-	add t2, t2, x0
-	add t3, t3, x0
-	add t4, t4, x0
-	add t5, t5, x0
-	add t6, t6, x0
-	add sp, sp, x0
 	li t2, 0xabab			// Verification if handler is returning and SIGUPD is working afer the handler
 	csrw pmpaddr1, t2		// If in M-mode, this instruction will work otherwise not.
 	csrr a4, pmpaddr1

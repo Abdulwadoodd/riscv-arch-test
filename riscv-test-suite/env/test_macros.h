@@ -56,7 +56,42 @@
         0: Two level translation
         1: Superpage
 */
-#define VPN32_MASK 0x3FF
+
+#define PTE_SETUP_RV32(_PAR, _PR, _TR0, _TR1, VA, level)  ;\
+    srli _PAR, _PAR, 12                                         ;\
+    slli _PAR, _PAR, 10                                         ;\
+    or _PAR, _PAR, _PR                                          ;\
+    .if (level==1)                                              ;\
+        LA(_TR1, rvtest_Sroot_pg_tbl)                           ;\
+        .set vpn, ((VA>>22)&0x3FF)<<2                           ;\
+    .endif                                                      ;\
+    .if (level==0)                                              ;\
+        LA(_TR1, rvtest_slvl1_pg_tbl)                           ;\
+        .set vpn, ((VA>>12)&0x3FF)<<2                           ;\
+    .endif                                                      ;\
+    LI(_TR0, vpn)                                               ;\
+    add _TR1, _TR1, _TR0                                        ;\
+    SREG _PAR, 0(_TR1)                                          
+
+#define PTE_PERMUPD_RV32(_PR, _TR0, _TR1, VA, level)                        ;\
+    .if (level==1)                                              ;\
+        LA(_TR1, rvtest_Sroot_pg_tbl)                           ;\
+        .set vpn, ((VA>>22)&0x3FF)<<2                           ;\
+    .endif                                                      ;\
+    .if (level==0)                                              ;\
+        LA(_TR1, rvtest_slvl1_pg_tbl)                           ;\
+        .set vpn, ((VA>>12)&0x3FF)<<2                           ;\
+    .endif                                                      ;\
+    LI(_TR0, vpn)                                               ;\
+    add _TR1, _TR1, _TR0                                        ;\
+    LREG _TR0, 0(_TR1)                                          ;\
+    srli _TR0, _TR0, 10                                         ;\
+    slli _TR0, _TR0, 10                                         ;\
+    or _TR0, _TR0, _PR                                          ;\
+    SREG _TR0, 0(_TR1)                                          ;\
+
+
+
 
 #define PTE_SETUP_SV32(_PAR, _PR, _TR0, _TR1, _TR2, VA, level)              ;\
     LA(_TR1, rvtest_Sroot_pg_tbl)   /* Base address of root page table*/    ;\
